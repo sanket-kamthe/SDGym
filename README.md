@@ -20,7 +20,7 @@
 # Overview
 
 Synthetic Data Gym (SDGym) is a framework to benchmark the performance of synthetic data generators
-for non-temporal tabular data. SDGym is based on a [paper](??)
+for non-temporal tabular data. SDGym is based on a [paper ] (??)
 of the same name, and the project is part of the [Data to AI Laboratory](https://dai.lids.mit.edu/) at MIT.
 
 
@@ -122,30 +122,19 @@ Also, when loading a custom dataset from a CSV file, it .
 ### Demo Datasets
 
 `SDGym` includes a few datasets to use for development or demonstration purposes. These datasets
-have been preprocessed to be ready to use with `SDGym`, following the requirements specified in
+are ready to use with `SDGym`, following the requirements specified in
 the [Input Format](#input-format) section.
-
-These datasets can be downloaded from [here](https://s3.amazonaws.com/sdgym/SDGymBenchmarkData.zip).
-After downloading them, you just need to unzip their contents into a folder named `data` at the
-root of `SDGym`.
-
-You can also execute the following commands from the root of the repository:
-```
-curl https://s3.amazonaws.com/sdgym/SDGymBenchmarkData.zip -o data.zip
-mkdir data
-unzip data.zip -d data/
-```
 
 Have below the list of included datasets and their original source:
 
-- MINIST28: Use flatten 28\*28 pixels into 784 binary columns with an extra label column.
-- MINIST12: Reshape 28\*28 pixels into 12\*12 binary columns with an extra label column.
-- Credit: Kaggle credit card fraud. [Link](https://www.kaggle.com/mlg-ulb/creditcardfraud)
-- Adult: Adult Dataset. [Link](https://archive.ics.uci.edu/ml/datasets/adult)
-- Census: KDD Census dataset.  [Link](https://archive.ics.uci.edu/ml/datasets/Census-Income+(KDD))
-- News: Online News Popularity Dataset (Regression).  [Link](https://archive.ics.uci.edu/ml/datasets/online+news+popularity)
-- Covertype: Covertype Dataset (8 continuous + 40 binary + 1 multi).  [Link](https://archive.ics.uci.edu/ml/datasets/Covertype)
-- Intrusion: Network intrusion detector kdd99.  [Link](https://archive.ics.uci.edu/ml/datasets/kdd+cup+1999+data)
+* MINIST28: Use flatten 28\*28 pixels into 784 binary columns with an extra label column.
+* MINIST12: Reshape 28\*28 pixels into 12\*12 binary columns with an extra label column.
+* Credit: Kaggle credit card fraud. [Credit dataset](https://www.kaggle.com/mlg-ulb/creditcardfraud)
+* Adult: Adult Dataset. [Adult dataset](https://archive.ics.uci.edu/ml/datasets/adult)
+* Census: KDD Census dataset. [Census dataset](https://archive.ics.uci.edu/ml/datasets/Census-Income+(KDD))
+* News: Online News Popularity Dataset (Regression). [News dataset](https://archive.ics.uci.edu/ml/datasets/online+news+popularity)
+* Covertype: Covertype Dataset (8 continuous + 40 binary + 1 multi). [Covertype dataset](https://archive.ics.uci.edu/ml/datasets/Covertype)
+* Intrusion: Network intrusion detector kdd99. [Intrusion dataset](https://archive.ics.uci.edu/ml/datasets/kdd+cup+1999+data)
 
 
 ## Model Format
@@ -168,7 +157,7 @@ started with **SDGym** by exploring its Python API.
 
 ## 1. Prepare your model
 
-As we mentioned on the [Model Format](#Model-Format) section above, in order to benchmark it, we
+As we mentioned on the [Model Format](#model-format) section above, in order to benchmark it, we
 must wrap our model in a function that takes as argument a table of data and returns a table of
 synthesized data.
 
@@ -186,7 +175,7 @@ def synthesizer(X):
     return model.sample(num_rows)
 ```
 
-# 2. Run
+## 2. Run
 
 Now we can run the `sdgym.benchmark` function to test our model:
 
