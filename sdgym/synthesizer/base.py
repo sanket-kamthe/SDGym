@@ -1,10 +1,28 @@
 import argparse
-import logging
 import glob
+import logging
 import os
 import json
+
 import numpy as np
 
+
+class BaseSynthesizer(object):
+    """docstring for Synthesizer."""
+
+    supported_datasets = [
+        'asia', 'alarm', 'child', 'insurance', 'grid', 'gridr', 'ring',
+        'adult', 'credit', 'census',
+        'news', 'covtype', 'intrusion', 'mnist12', 'mnist28']
+
+    def __init__(self):
+        pass
+
+    def fit(self, data):
+        pass
+
+    def sample(self, num_samples):
+        pass
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,22 +40,6 @@ parser.add_argument('--name', type=str, default='',
 parser.add_argument('--sample', type=int, default=50000,
                     help='maximum samples in the synthetic data.')
 
-class SynthesizerBase(object):
-    """docstring for Synthesizer."""
-
-    supported_datasets = [
-        'asia', 'alarm', 'child', 'insurance', 'grid', 'gridr', 'ring',
-        'adult', 'credit', 'census',
-        'news', 'covtype', 'intrusion', 'mnist12', 'mnist28']
-
-    def train(self, train_data):
-        pass
-
-    def generate(self, n):
-        pass
-
-    def init(self, meta, working_dir):
-        pass
 
 
 def run(synthesizer):

@@ -10,6 +10,7 @@ from sklearn.datasets import make_circles
 
 from .. import utils
 
+
 np.random.seed(0)
 
 
@@ -22,9 +23,8 @@ def create_distribution(dist_type, num_samples):
         return make_two_rings(num_samples)
 
 
-def make_gaussian_mixture(dist_type, num_samples, num_components = 25, s = 0.05, n_dim = 2):
-    """ Generate from Gaussian mixture models arranged in grid or ring
-    """
+def make_gaussian_mixture(dist_type, num_samples, num_components=25, s=0.05, n_dim=2):
+    """Generate from Gaussian mixture models arranged in grid or ring."""
     sigmas = np.zeros((n_dim,n_dim))
     np.fill_diagonal(sigmas, s)
     samples = np.empty([num_samples,n_dim])
@@ -69,8 +69,6 @@ if __name__ == "__main__":
         os.mkdir(output_dir)
     except:
         pass
-
-
 
     # Store Meta Files
     meta = []
