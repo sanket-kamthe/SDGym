@@ -4,12 +4,10 @@
 </p>
 
 
-
 [![Travis](https://travis-ci.org/DAI-Lab/SDGym.svg?branch=master)](https://travis-ci.org/DAI-Lab/SDGym)
 [![PyPi Shield](https://img.shields.io/pypi/v/sdgym.svg)](https://pypi.python.org/pypi/sdgym)
 [![Coverage Status](https://codecov.io/gh/DAI-Lab/SDGym/branch/master/graph/badge.svg)](https://codecov.io/gh/DAI-Lab/SDGym)
 [![Downloads](https://pepy.tech/badge/sdgym)](https://pepy.tech/project/sdgym)
-
 
 # SDGym - Synthetic Data Gym
 
@@ -23,11 +21,9 @@ Synthetic Data Gym (SDGym) is a framework to benchmark the performance of synthe
 for non-temporal tabular data. SDGym is based on a [paper ] (??)
 of the same name, and the project is part of the [Data to AI Laboratory](https://dai.lids.mit.edu/) at MIT.
 
-
 # Install
 
 ## Requirements
-
 
 **SDGym** has been developed and tested on [Python 3.5, and 3.6](https://www.python.org/downloads/)
 
@@ -99,27 +95,28 @@ dependencies for code linting and testing.
 make install-develop
 ```
 
-Make sure to use them regularly while developing by running the commands `make lint` and `make test`.
+Make sure to use them regularly while developing by running the commands `make lint` and
+`make test`.
 
-# How to benchmark your synthesizer
+# How to benchmark your synthesizer?
 
-In order to use **SDGym** you will need a function that has as unique input a table of data output one table of the same size of synthesized data. That is, that it has a signature like this:
+In order to use **SDGym** you will need a function that has as unique input a table of data output
+ one table of the same size of synthesized data. That is, that it has a signature like this:
 
 ```python
 synthesized_data  = synthesizer(real_data)
 ```
 
-Both the input and the output tables of your synthesizer must be a `pandas.DataFrame` whose categorical columns are encoded using the [categorical dtype](https://pandas.pydata.org/pandas-docs/stable/user_guide/categorical.html). Also is expected that the sizes of both the input and the output are the same size.
-
-If your synthesizer is a class, lets assume it has a Full Qualified Name `my_package.my_module.MyModel`, in order to benchmark it with SDGym you can wrap in a function like this:
+If your synthesizer is a class, lets assume it has a Full Qualified Name `package.module.Model`,
+in order to benchmark it with SDGym you can wrap in a function like this:
 
 ```python
-from my_package.my_module import MyModel
+from package.module import Model
 
 def synthesizer(X):
     num_rows = X.shape[0]
 
-    model = MyModel()
+    model = Model()
     model.fit(X)
 
     return model.sample(num_rows)
@@ -128,42 +125,23 @@ def synthesizer(X):
 This function should contain all parameters and arguments to instantiate, fit and sample using
 your model.
 
-# Input Format
+# What data shall accept your synthesizer?
 
-The main input of **SDGym** is a synthesizer to be benchmarked, which is expected to be a function
-that accept as only argument a table of data and return a synthesized table, like this:
+As we mentioned in the section before, the main input of **SDGym** is a synthesizer to be
+benchmarked, which is expected to be a function that has as unique input and output a table of
+data.
 
-```python
-synthesized_data  = synthesizer(real_data)
-```
-
-Where `real_data` is a `pandas.DataFrame` whose categorical columns 
+Both the input and the output tables of your synthesizer must be a `pandas.DataFrame` whose
+categorical columns are encoded using the
 [categorical dtype](https://pandas.pydata.org/pandas-docs/stable/user_guide/categorical.html).
 
-`synthesizer` is our function, and `synthesized_data` is its output.
-
-If our synthesizer is a class, we can wrap it in a function that include all parameters required
-to instantiate, fit and sample your class.
-
-```python
-from my_package.my_module import MyModel
-
-def synthesizer(X):
-    num_rows = X.shape[0]
-
-    model = MyModel()
-    model.fit(X)
-
-    return model.sample(num_rows)
-```
-
-## 
+It's also expected that the sizes, index and column names of both the input and the output will
+be the same.
 
 # Quickstart
 
 In this short tutorial we will guide you through a series of steps that will help you getting
 started with **SDGym** by exploring its Python API.
-
 
 ## 1. Load the synthesizer
 
@@ -172,7 +150,6 @@ The first step is loading our synthesizer function.
 ```python
 from my_package.my_module import synthesizer
 ```
-
 
 ## 2. Run
 
@@ -189,7 +166,8 @@ score = benchmark(synthesizer)
 For more details about **SDGym** and all its possibilities and features, please check the
 [documentation site](https://DAI-Lab.github.io/SDGym/).
 
-There you can learn more about [how to contribute to SDGym](https://HDI-Project.github.io/SDGym/community/contributing.html)
+There you can learn more about
+[how to contribute to SDGym](https://HDI-Project.github.io/SDGym/community/contributing.html)
 in order to help us developing new features or cool ideas.
 
 # Credits
@@ -197,13 +175,11 @@ in order to help us developing new features or cool ideas.
 SDGym is an open source project from the Data to AI Lab at MIT which has been built and maintained
 over the years by the following team:
 
-* Lei Xu <leonard.xu.thu@gmail.com>
-* Kalyan Veeramachaneni <kalyan@csail.mit.edu>
-* Manuel Alvarez <manuel@pythiac.com>
-
+- Lei Xu <leonard.xu.thu@gmail.com>
+- Kalyan Veeramachaneni <kalyan@csail.mit.edu>
+- Manuel Alvarez <manuel@pythiac.com>
 
 ## Citing SDGym
-
 
 ## Related Projects
 
