@@ -1,46 +1,43 @@
-from .synthesizer_base import SynthesizerBase, run
-from .synthesizer_utils import GeneralTransformer
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.nn import functional as F
-import torch.utils.data
-import torch.optim as optim
 import os
 
+import numpy as np
+import torch
+from torch.nn import Dropout, Linear, Module, ReLU, Sequential
+from torch.optim import Adam
+from torch.nn.functional import softmax, mse_loss
+from torch.utils.data import TensorDataset, DataLoader
 
-class Reconstructor(nn.Module):
+from sdgym.synthesizer.base import SynthesizerBase, run
+from sdgym.synthesizer.utils import GeneralTransformer
 
-    def __init__(self, dataDim, recDims, embeddingDim):
+
+class Reconstructor(Module):
+
+    def __init__(self, data_dim, reconstructor_dim, embedding_dim):
         super(Reconstructor, self).__init__()
-        dim = dataDim
+        dim = data_dim
         seq = []
-        for item in list(recDims):
-            seq += [
-                nn.Linear(dim, item),
-                nn.ReLU()
-            ]
+        for item in list(reconstructor_dim):
+            seq += [nn.Linear(dim, item), nn.ReLU() ]
             dim = item
-        seq += [nn.Linear(dim, embeddingDim)]
+        
+        seq += [nn.Linear(dim, embedding_dim)]
         self.seq = nn.Sequential(*seq)
 
     def forward(self, input):
         return self.seq(input)
 
 
-class Discriminator(nn.Module):
+class Discriminator(Module):
 
-    def __init__(self, inputDim, disDims):
+    def __init__(self, input_dim, discriminator_dim):
         super(Discriminator, self).__init__()
-        dim = inputDim
+        dim = input_dim
         seq = []
-        for item in list(disDims):
-            seq += [
-                nn.Linear(dim, item),
-                nn.ReLU(),
-                nn.Dropout(0.5)
-            ]
+        for item in list(discriminator_dim):
+            seq += [nn.Linear(dim, item), nn.ReLU(), nn.Dropout(0.5)]
             dim = item
+
         seq += [nn.Linear(dim, 1)]
         self.seq = nn.Sequential(*seq)
 
@@ -48,19 +45,17 @@ class Discriminator(nn.Module):
         return self.seq(input)
 
 
-class Generator(nn.Module):
+class Generator(Module):
 
-    def __init__(self, embeddingDim, genDims, dataDim):
+    def __init__(self, embedding_dim, genenerator_dim, data_dim):
         super(Generator, self).__init__()
-        dim = embeddingDim
+        dim = embedding_dim
         seq = []
-        for item in list(genDims):
-            seq += [
-                nn.Linear(dim, item),
-                nn.ReLU()
-            ]
+        for item in list(generator_dim):
+            seq += [nn.Linear(dim, item), nn.ReLU()]
             dim = item
-        seq.append(nn.Linear(dim, dataDim))
+
+        seq.append(nn.Linear(dim, data_dim))
         self.seq = nn.Sequential(*seq)
 
     def forward(self, input, output_info):
@@ -72,12 +67,15 @@ class Generator(nn.Module):
                 ed = st + item[0]
                 data_t.append(torch.tanh(data[:, st:ed]))
                 st = ed
+
             elif item[1] == 'softmax':
                 ed = st + item[0]
-                data_t.append(F.softmax(data[:, st:ed], dim=1))
+                data_t.append(softmax(data[:, st:ed], dim=1))
                 st = ed
+
             else:
                 assert 0
+
         return torch.cat(data_t, dim=1)
 
 
@@ -106,17 +104,17 @@ class VEEGANSynthesizer(SynthesizerBase):
         self.transformer = GeneralTransformer(self.meta, act='tanh')
         self.transformer.fit(train_data)
         train_data = self.transformer.transform(train_data)
-        dataset = torch.utils.data.TensorDataset(torch.from_numpy(train_data.astype('float32')).to(self.device))
-        loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
+        dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(self.device))
+        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         data_dim = self.transformer.output_dim
         generator = Generator(self.embeddingDim, self.genDim, data_dim).to(self.device)
         discriminator = Discriminator(self.embeddingDim + data_dim, self.disDim).to(self.device)
         reconstructor = Reconstructor(data_dim, self.recDim, self.embeddingDim).to(self.device)
 
-        optimizerG = optim.Adam(generator.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
-        optimizerD = optim.Adam(discriminator.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
-        optimizerR = optim.Adam(reconstructor.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
+        optimizerG = Adam(generator.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
+        optimizerD = Adam(discriminator.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
+        optimizerR = Adam(reconstructor.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
 
         max_epoch = max(self.store_epoch)
         mean = torch.zeros(self.batch_size, self.embeddingDim, device=self.device)
@@ -133,8 +131,8 @@ class VEEGANSynthesizer(SynthesizerBase):
                 y_fake = discriminator(torch.cat([fake, fakez], dim=1))
 
                 loss_d = -(torch.log(torch.sigmoid(y_real) + 1e-4).mean()) - (torch.log(1. - torch.sigmoid(y_fake) + 1e-4).mean())
-                loss_g = -y_fake.mean() + F.mse_loss(fakezrec, fakez, reduction='mean') / self.embeddingDim
-                loss_r = -y_fake.mean() + F.mse_loss(fakezrec, fakez, reduction='mean') / self.embeddingDim
+                loss_g = -y_fake.mean() + mse_loss(fakezrec, fakez, reduction='mean') / self.embeddingDim
+                loss_r = -y_fake.mean() + mse_loss(fakezrec, fakez, reduction='mean') / self.embeddingDim
                 optimizerD.zero_grad()
                 loss_d.backward(retain_graph=True)
                 optimizerD.step()

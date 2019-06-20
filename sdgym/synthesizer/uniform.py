@@ -1,6 +1,10 @@
-from .synthesizer_base import SynthesizerBase, run
 import numpy as np
+
+from sdgym.synthesizers.base import SynthesizerBase, run
+
+
 rng = np.random
+
 
 class UniformSynthesizer(SynthesizerBase):
     """docstring for IdentitySynthesizer."""

@@ -2,15 +2,20 @@ from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
 import numpy as np
 
-from ..utils import CATEGORICAL, ORDINAL, CONTINUOUS
+from sdgym.utils import ORDINAL, CONTINUOUS
+
 
 class DiscretizeTransformer(object):
     """Discretize continuous columns into several bins.
-    Transformation result is a int array."""
+
+    Transformation result is a int array.
+
+    """
     def __init__(self, meta, n_bins):
         self.meta = meta
         self.c_index = [id for id, info in enumerate(meta) if info['type'] == CONTINUOUS]
-        self.kbin_discretizer = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='uniform')
+        self.kbin_discretizer = KBinsDiscretizer(
+            n_bins=n_bins, encode='ordinal', strategy='uniform')
 
     def fit(self, data):
         if self.c_index == []:
@@ -33,9 +38,9 @@ class DiscretizeTransformer(object):
         data_t[:, self.c_index] = self.kbin_discretizer.inverse_transform(data[:, self.c_index])
         return data_t
 
+
 class GeneralTransformer(object):
-    """
-    Continuous and ordinal columns are normalized to [0, 1].
+    """Continuous and ordinal columns are normalized to [0, 1].
     Discrete columns are converted to a one-hot vector.
     """
     def __init__(self, meta, act='sigmoid'):
@@ -84,17 +89,19 @@ class GeneralTransformer(object):
                 current = data[:, 0]
                 data = data[:, 1:]
 
-
                 if self.act == 'tanh':
                     current = (current + 1) / 2
+
                 current = np.clip(current, 0, 1)
                 data_t[:, id_] = current * (info['max'] - info['min']) + info['min']
 
             elif info['type'] == ORDINAL:
                 current = data[:, 0]
                 data = data[:, 1:]
+
                 if self.act == 'tanh':
                     current = (current + 1) / 2
+
                 current = current * info['size']
                 current = np.round(current).clip(0, info['size'] - 1)
                 data_t[:, id_] = current
@@ -104,6 +111,7 @@ class GeneralTransformer(object):
                 data_t[:, id_] = np.argmax(current, axis=1)
 
         return data_t
+
 
 class GMMTransformer(object):
     """
@@ -169,7 +177,7 @@ class GMMTransformer(object):
         for id_, info in enumerate(self.meta):
             if info['type'] == CONTINUOUS:
                 u = data[:, st]
-                v = data[:, st+1:st+1+self.n_clusters]
+                v = data[:, st + 1:st + 1 + self.n_clusters]
                 if sigmas is not None:
                     sig = sigmas[st]
                     u = np.random.normal(u, sig)
@@ -180,25 +188,25 @@ class GMMTransformer(object):
                 p_argmax = np.argmax(v, axis=1)
                 std_t = stds[p_argmax]
                 mean_t = means[p_argmax]
-                tmp = u * 2 * std_t  + mean_t
+                tmp = u * 2 * std_t + mean_t
                 data_t[:, id_] = tmp
+
             else:
-                current = data[:, st:st+info['size']]
+                current = data[:, st:st + info['size']]
                 st += info['size']
                 data_t[:, id_] = np.argmax(current, axis=1)
+
         return data_t
 
+
 class BGMTransformer(object):
-    """
-    Continuous columns are modeled with a BayesianGMM.
-        and then normalized to a scalor [0, 1] and a vector.
+    """Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
 
     Discrete and ordinal columns are converted to a one-hot vector.
     """
 
     def __init__(self, meta, n_clusters=10, eps=0.005):
-        """n_cluster is the upper bound of modes
-        """
+        """n_cluster is the upper bound of modes."""
         self.meta = meta
         self.n_clusters = n_clusters
         self.eps = eps
@@ -211,10 +219,11 @@ class BGMTransformer(object):
         self.components = []
         for id_, info in enumerate(self.meta):
             if info['type'] == CONTINUOUS:
-                gm = BayesianGaussianMixture(self.n_clusters,
-                        weight_concentration_prior_type='dirichlet_process',
-                        weight_concentration_prior = 0.001,
-                        n_init=1)
+                gm = BayesianGaussianMixture(
+                    self.n_clusters,
+                    weight_concentration_prior_type='dirichlet_process',
+                    weight_concentration_prior=0.001,
+                    n_init=1)
                 gm.fit(data[:, id_].reshape([-1, 1]))
                 model.append(gm)
                 comp = gm.weights_ > self.eps
@@ -274,10 +283,12 @@ class BGMTransformer(object):
         for id_, info in enumerate(self.meta):
             if info['type'] == CONTINUOUS:
                 u = data[:, st]
-                v = data[:, st+1:st+1+np.sum(self.components[id_])]
+                v = data[:, st + 1:st + 1 + np.sum(self.components[id_])]
+
                 if sigmas is not None:
                     sig = sigmas[st]
                     u = np.random.normal(u, sig)
+
                 u = np.clip(u, -1, 1)
                 v_t = np.ones((data.shape[0], self.n_clusters)) * -100
                 v_t[:, self.components[id_]] = v
@@ -288,10 +299,12 @@ class BGMTransformer(object):
                 p_argmax = np.argmax(v, axis=1)
                 std_t = stds[p_argmax]
                 mean_t = means[p_argmax]
-                tmp = u * 4 * std_t  + mean_t
+                tmp = u * 4 * std_t + mean_t
                 data_t[:, id_] = tmp
+
             else:
-                current = data[:, st:st+info['size']]
+                current = data[:, st:st + info['size']]
                 st += info['size']
                 data_t[:, id_] = np.argmax(current, axis=1)
+
         return data_t

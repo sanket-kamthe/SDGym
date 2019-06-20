@@ -1,22 +1,18 @@
 import numpy as np
 
-from sdgym.synthesizer_base import SynthesizerBase, run
+from sdgym.synthesizer_base import SynthesizerBase
 
 
 class IdentitySynthesizer(SynthesizerBase):
-    """docstring for IdentitySynthesizer."""
+    """Trivial synthesizer.
 
-    def train(self, train_data):
-        self.learned = train_data.copy()
+    Returns the same exact data that is used to fit it.
+    """
 
-    def generate(self, n):
-        assert len(self.learned) >= n
-        np.random.shuffle(self.learned)
-        return [(0, self.learned[:n])]
+    def fit(self, train_data):
+        self.data = train_data.copy()
 
-    def init(self, meta, working_dir):
-        pass
-
-
-if __name__ == "__main__":
-    run(IdentitySynthesizer())
+    def sample(self, num_samples):
+        assert self.data.shape[0] >= num_samples
+        np.random.shuffle(self.data)
+        return [(0, self.data[:num_samples])]
