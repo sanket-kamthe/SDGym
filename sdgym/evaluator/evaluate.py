@@ -1,44 +1,63 @@
-import logging
-import glob
 import argparse
-import os
+import glob
+import itertools
 import json
-import numpy as np
-from sklearn.tree import DecisionTreeClassifier as DTC
-from sklearn.tree import DecisionTreeRegressor as DTR
+import logging
+import os
 
+import numpy as np
+from pomegranate import BayesianNetwork
+from scipy.stats import multivariate_normal
 from sklearn.ensemble import AdaBoostClassifier as ABC
 from sklearn.ensemble import AdaBoostRegressor as ABR
-
-from sklearn.linear_model import LogisticRegression as LRC
 from sklearn.linear_model import LinearRegression as LRR
-
+from sklearn.linear_model import LogisticRegression as LRC
+from sklearn.metrics import accuracy_score, f1_score, r2_score
+from sklearn.mixture import GaussianMixture as GMM
 from sklearn.neural_network import MLPClassifier as MLPC
 from sklearn.neural_network import MLPRegressor as MLPR
-
-from sklearn.mixture import GaussianMixture as GMM
-
-from sklearn.metrics import accuracy_score, f1_score, r2_score
+from sklearn.tree import DecisionTreeClassifier as DTC
+from sklearn.tree import DecisionTreeRegressor as DTR
 from sklearn.utils import shuffle
 
-from ..utils import CATEGORICAL, CONTINUOUS, ORDINAL
-
-from scipy.stats import multivariate_normal
-import itertools
-
-from pomegranate import BayesianNetwork
+from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 
 logging.basicConfig(level=logging.INFO)
 
-parser = argparse.ArgumentParser(
-    description='Evaluate output of one synthesizer.')
-parser.add_argument('--result', type=str, default='output/__result__',
-                    help='result dir')
-parser.add_argument('--force', dest='force',
-                    action='store_true', help='overwrite result')
-parser.set_defaults(force=False)
-parser.add_argument('synthetic', type=str,
-                    help='synthetic data folder')
+DATASET_EVALUATOR_MAP = {
+    "mnist12": default_multi_classification,
+    "mnist28": default_multi_classification,
+    "covtype": default_multi_classification,
+    "intrusion": default_multi_classification,
+    'credit': default_binary_classification,
+    'census': default_binary_classification,
+    'adult': default_binary_classification,
+    'news': news_regression,
+    'grid': default_gmm_likelihood,
+    'gridr': default_gmm_likelihood,
+    'ring': default_gmm_likelihood,
+    'asia': default_bayesian_likelihood,
+    'alarm': default_bayesian_likelihood,
+    'child': default_bayesian_likelihood,
+    'insurance': default_bayesian_likelihood,
+}
+
+
+BAYESIAN_PARAMETER = {
+
+    'grid': 30,
+    'gridr': 30
+    'ring': 10
+}
+
+
+def get_arg_parser():
+    parser = argparse.ArgumentParser( description='Evaluate output of one synthesizer.')
+    parser.add_argument('--result', type=str, default='output/__result__', help='result dir')
+    parser.add_argument('--force', dest='force', action='store_true', help='overwrite result', default=False)
+    parser.add_argument('synthetic', type=str, help='synthetic data folder')
+
+    return parser
 
 
 def default_multi_classification(x_train, y_train, x_test, y_test, classifiers):
@@ -150,6 +169,7 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
 
     return features, labels
 
+
 def get_models(dataset):
     if dataset in ["mnist12", "mnist28"]:
         classifiers = [
@@ -204,6 +224,7 @@ def default_gmm_likelihood(trainset, testset, n):
         "test_likelihood": l2,
     }]
 
+
 def mapper(data, meta):
     data_t = []
     for row in data:
@@ -243,33 +264,27 @@ def default_bayesian_likelihood(dataset, trainset, testset, meta):
         "test_likelihood": l2,
     }]
 
+
 def evalute_dataset(dataset, trainset, testset, meta):
-    if dataset in ["mnist12", "mnist28", "covtype", "intrusion"]:
-        x_train, y_train = make_features(trainset, meta)
-        x_test, y_test = make_features(testset, meta)
-        return default_multi_classification(x_train, y_train, x_test, y_test, get_models(dataset))
 
-    elif dataset in ['credit', 'census', 'adult']:
-        x_train, y_train = make_features(trainset, meta)
-        x_test, y_test = make_features(testset, meta)
-        return default_binary_classification(x_train, y_train, x_test, y_test, get_models(dataset))
+    evaluator = DATASET_EVALUATOR_MAP.get(dataset)
 
-    elif dataset in ['news']:
-        x_train, y_train = make_features(trainset, meta)
-        x_test, y_test = make_features(testset, meta)
-        return news_regression(x_train, y_train, x_test, y_test, get_models(dataset))
-
-    elif dataset in ['grid', 'gridr']:
-        return default_gmm_likelihood(trainset, testset, 30)
-
-    elif dataset in ['ring']:
-        return default_gmm_likelihood(trainset, testset, 10)
-
-    elif dataset in ['asia', 'alarm', 'child', 'insurance']:
-        return default_bayesian_likelihood(dataset, trainset, testset, meta)
-    else:
+    if evaluator is None:
         logging.warning("{} evaluation not defined.".format(dataset))
-        assert 0
+        return
+
+    if dataset in ['asia', 'alarm', 'child', 'insurance']:
+        return evaluator(dataset, trainset, testset, meta)
+
+    if dataset in ["mnist12", "mnist28", "covtype", "intrusion", 'credit', 'census', 'adult', 'news']:
+        x_train, y_train = make_features(trainset, meta)
+        x_test, y_test = make_features(testset, meta)
+        return evaluator(x_train, y_train, x_test, y_test, get_models(dataset))
+
+    bayesian_parameter = BAYESIAN_PARAMETER.get(datasert)
+    if bayesian_parameter:
+        return evaluator(trainset, testset, bayesian_parameter)
+
 
 def compute_distance(trainset, syn, meta, sample=300):
     mask_d = np.zeros(len(meta))
@@ -297,6 +312,7 @@ def compute_distance(trainset, syn, meta, sample=300):
 
 
 if __name__ == "__main__":
+    parser = get_arg_parser()
     args = parser.parse_args()
 
     if not os.path.exists(args.result):

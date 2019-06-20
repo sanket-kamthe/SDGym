@@ -101,67 +101,17 @@ make install-develop
 
 Make sure to use them regularly while developing by running the commands `make lint` and `make test`.
 
+# How to benchmark your synthesizer
 
-# Input Format
+In order to use **SDGym** you will need a function that has as unique input a table of data output one table of the same size of synthesized data. That is, that it has a signature like this:
 
-## Data Format
+```python
+synthesized_data  = synthesizer(real_data)
+```
 
-All datasets used in this project, either provided by **SDGym** or by the user will should have
-the following characteristics:
+Both the input and the output tables of your synthesizer must be a `pandas.DataFrame` whose categorical columns are encoded using the [categorical dtype](https://pandas.pydata.org/pandas-docs/stable/user_guide/categorical.html). Also is expected that the sizes of both the input and the output are the same size.
 
-* It must be a `pandas.DataFrame` object
-* All categorical values have to use the
-  [categorical dtype](https://pandas.pydata.org/pandas-docs/stable/user_guide/categorical.html).
-
-Also, when loading a custom dataset from a CSV file, it .
-
-* It uses a single comma, `,`, as the separator.
-* Its first row is a header that contains the names of the columns.
-* It contains no index column
-
-### Demo Datasets
-
-`SDGym` includes a few datasets to use for development or demonstration purposes. These datasets
-are ready to use with `SDGym`, following the requirements specified in
-the [Input Format](#input-format) section.
-
-Have below the list of included datasets and their original source:
-
-* MINIST28: Use flatten 28\*28 pixels into 784 binary columns with an extra label column.
-* MINIST12: Reshape 28\*28 pixels into 12\*12 binary columns with an extra label column.
-* Credit: Kaggle credit card fraud. [Credit dataset](https://www.kaggle.com/mlg-ulb/creditcardfraud)
-* Adult: Adult Dataset. [Adult dataset](https://archive.ics.uci.edu/ml/datasets/adult)
-* Census: KDD Census dataset. [Census dataset](https://archive.ics.uci.edu/ml/datasets/Census-Income+(KDD))
-* News: Online News Popularity Dataset (Regression). [News dataset](https://archive.ics.uci.edu/ml/datasets/online+news+popularity)
-* Covertype: Covertype Dataset (8 continuous + 40 binary + 1 multi). [Covertype dataset](https://archive.ics.uci.edu/ml/datasets/Covertype)
-* Intrusion: Network intrusion detector kdd99. [Intrusion dataset](https://archive.ics.uci.edu/ml/datasets/kdd+cup+1999+data)
-
-
-## Model Format
-
-Considering that there can be multiple possible API that models can implement and is virtually
-impossible to consider all of them, the approach this project has taken is to accept as
-synthesizers only functions that takes as arguments a `pandas.DataFrame` with the format mentioned
-in the [Data Format](#data-format) section.
-
-So in order to benchmark a model using **SDGym**, you only need to wrap in a function that takes
-as only argument a `pandas.DataFrame` and returns a synthesized one, with the same number of rows
-as the original.
-
-
-# Quickstart
-
-In this short tutorial we will guide you through a series of steps that will help you getting
-started with **SDGym** by exploring its Python API.
-
-
-## 1. Prepare your model
-
-As we mentioned on the [Model Format](#model-format) section above, in order to benchmark it, we
-must wrap our model in a function that takes as argument a table of data and returns a table of
-synthesized data.
-
-All parameters required to instantiate, fit and sample your model must be **inside** of the function.
+If your synthesizer is a class, lets assume it has a Full Qualified Name `my_package.my_module.MyModel`, in order to benchmark it with SDGym you can wrap in a function like this:
 
 ```python
 from my_package.my_module import MyModel
@@ -175,9 +125,58 @@ def synthesizer(X):
     return model.sample(num_rows)
 ```
 
+This function should contain all parameters and arguments to instantiate, fit and sample using
+your model.
+
+# Input Format
+
+The main input of **SDGym** is a synthesizer to be benchmarked, which is expected to be a function
+that accept as only argument a table of data and return a synthesized table, like this:
+
+```python
+synthesized_data  = synthesizer(real_data)
+```
+
+Where `real_data` is a `pandas.DataFrame` whose categorical columns 
+[categorical dtype](https://pandas.pydata.org/pandas-docs/stable/user_guide/categorical.html).
+
+`synthesizer` is our function, and `synthesized_data` is its output.
+
+If our synthesizer is a class, we can wrap it in a function that include all parameters required
+to instantiate, fit and sample your class.
+
+```python
+from my_package.my_module import MyModel
+
+def synthesizer(X):
+    num_rows = X.shape[0]
+
+    model = MyModel()
+    model.fit(X)
+
+    return model.sample(num_rows)
+```
+
+## 
+
+# Quickstart
+
+In this short tutorial we will guide you through a series of steps that will help you getting
+started with **SDGym** by exploring its Python API.
+
+
+## 1. Load the synthesizer
+
+The first step is loading our synthesizer function.
+
+```python
+from my_package.my_module import synthesizer
+```
+
+
 ## 2. Run
 
-Now we can run the `sdgym.benchmark` function to test our model:
+Now we can run the `benchmark` function to test our model:
 
 ```python
 from sdgym import benchmark

@@ -1,19 +1,23 @@
-from .synthesizer_base import SynthesizerBase, run
-from .synthesizer_utils import GeneralTransformer
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.utils.data
-import torch.optim as optim
 import os
 
-class ResidualFC(nn.Module):
-    def __init__(self, inputDim, outputDim, activate, bnDecay):
+import numpy as np
+import torch
+from torch.nn import functional as F, Sequential, Module, Linear, BatchNorm1d
+
+import torch.utils.data
+from torch import optim
+from torch import nn
+
+from sdgym.synthesizer_base import SynthesizerBase, run
+from sdgym.synthesizer_utils import GeneralTransformer
+
+
+class ResidualFC(Module):
+    def __init__(self, input_dim, output_dim, activate, bnDecay):
         super(ResidualFC, self).__init__()
-        self.seq = nn.Sequential(
-            nn.Linear(inputDim, outputDim),
-            nn.BatchNorm1d(outputDim, momentum=bnDecay),
+        self.seq = Sequential(
+            Linear(input_dim, output_dim),
+            BatchNorm1d(output_dim, momentum=bnDecay),
             activate()
         )
 
@@ -21,7 +25,8 @@ class ResidualFC(nn.Module):
         residual = self.seq(input)
         return input + residual
 
-class Generator(nn.Module):
+
+class Generator(Module):
     def __init__(self, randomDim, hiddenDim, bnDecay):
         super(Generator, self).__init__()
 
@@ -32,27 +37,28 @@ class Generator(nn.Module):
             seq += [ResidualFC(dim, dim, nn.ReLU, bnDecay)]
         assert hiddenDim[-1] == dim
         seq += [
-            nn.Linear(dim, dim),
-            nn.BatchNorm1d(dim, momentum=bnDecay),
+            Linear(dim, dim),
+            BatchNorm1d(dim, momentum=bnDecay),
             nn.ReLU()
         ]
-        self.seq = nn.Sequential(*seq)
+        self.seq = Sequential(*seq)
 
     def forward(self, input):
         return self.seq(input)
 
-class Discriminator(nn.Module):
+
+class Discriminator(Module):
     def __init__(self, dataDim, hiddenDim):
         super(Discriminator, self).__init__()
         dim = dataDim * 2
         seq = []
         for item in list(hiddenDim):
             seq += [
-                nn.Linear(dim, item),
+                Linear(dim, item),
                 nn.ReLU() if item > 1 else nn.Sigmoid()
             ]
             dim = item
-        self.seq = nn.Sequential(*seq)
+        self.seq = Sequential(*seq)
 
     def forward(self, input):
         mean = input.mean(dim=0, keepdim=True)
@@ -61,35 +67,36 @@ class Discriminator(nn.Module):
         return self.seq(inp)
 
 
-class Encoder(nn.Module):
+class Encoder(Module):
     def __init__(self, dataDim, compressDims, embeddingDim):
         super(Encoder, self).__init__()
         dim = dataDim
         seq = []
         for item in list(compressDims) + [embeddingDim]:
             seq += [
-                nn.Linear(dim, item),
+                Linear(dim, item),
                 nn.ReLU()
             ]
             dim = item
-        self.seq = nn.Sequential(*seq)
+        self.seq = Sequential(*seq)
 
     def forward(self, input):
         return self.seq(input)
 
-class Decoder(nn.Module):
+
+class Decoder(Module):
     def __init__(self, embeddingDim, decompressDims, dataDim):
         super(Decoder, self).__init__()
         dim = embeddingDim
         seq = []
         for item in list(decompressDims):
             seq += [
-                nn.Linear(dim, item),
+                Linear(dim, item),
                 nn.ReLU()
             ]
             dim = item
-        seq.append(nn.Linear(dim, dataDim))
-        self.seq = nn.Sequential(*seq)
+        seq.append(Linear(dim, dataDim))
+        self.seq = Sequential(*seq)
 
     def forward(self, input, output_info):
         return self.seq(input)

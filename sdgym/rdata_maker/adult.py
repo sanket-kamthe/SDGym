@@ -1,7 +1,6 @@
 # Generate adult datasets
 
 import os
-import logging
 import json
 import numpy as np
 import pandas as pd

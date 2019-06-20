@@ -1,8 +1,10 @@
-from .synthesizer_base import SynthesizerBase, run
-from pomegranate import BayesianNetwork, DiscreteDistribution, ConditionalProbabilityTable
-from .synthesizer_utils import DiscretizeTransformer
 import json
+
 import numpy as np
+from pomegranate import BayesianNetwork, DiscreteDistribution, ConditionalProbabilityTable
+
+from sdgym.synthesizer_base import SynthesizerBase, run
+
 
 def bnsample(model, n):
     nodes_parents = model.structure

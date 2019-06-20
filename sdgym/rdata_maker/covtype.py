@@ -1,12 +1,11 @@
 # Generate covtype datasets
 
 import os
-import logging
 import json
 import numpy as np
 import pandas as pd
 
-from ..utils import CATEGORICAL, CONTINUOUS, ORDINAL, verify
+from sdgym.utils import CATEGORICAL, CONTINUOUS, verify
 
 
 output_dir = "data/real/"

@@ -12,6 +12,7 @@ from .. import utils
 
 np.random.seed(0)
 
+
 def create_distribution(dist_type, num_samples):
     if dist_type in ["grid", "gridr"]:
         return make_gaussian_mixture(dist_type, num_samples)
@@ -19,6 +20,7 @@ def create_distribution(dist_type, num_samples):
         return make_gaussian_mixture(dist_type, num_samples, num_components = 8)
     elif dist_type == "2rings":
         return make_two_rings(num_samples)
+
 
 def make_gaussian_mixture(dist_type, num_samples, num_components = 25, s = 0.05, n_dim = 2):
     """ Generate from Gaussian mixture models arranged in grid or ring
@@ -45,9 +47,11 @@ def make_gaussian_mixture(dist_type, num_samples, num_components = 25, s = 0.05,
             samples[i*bsize:(i+1)*bsize,:] = np.random.multivariate_normal(mus[i],sigmas,size = bsize)
     return samples
 
+
 def make_two_rings(num_samples):
     samples, labels = make_circles(num_samples, shuffle=True, noise=None, random_state=None, factor=0.6)
     return samples
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate simulated Data for a distribution')

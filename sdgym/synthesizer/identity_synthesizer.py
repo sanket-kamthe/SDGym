@@ -1,5 +1,7 @@
-from .synthesizer_base import SynthesizerBase, run
 import numpy as np
+
+from sdgym.synthesizer_base import SynthesizerBase, run
+
 
 class IdentitySynthesizer(SynthesizerBase):
     """docstring for IdentitySynthesizer."""
