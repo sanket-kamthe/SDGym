@@ -1,25 +1,67 @@
+import numpy as np
+import pandas as pd
+
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
-import numpy as np
 
 from sdgym.utils import ORDINAL, CONTINUOUS
 
 
-class DiscretizeTransformer(object):
+class Transformer:
+
+    def get_metadata(self, data):
+        meta = []
+
+        for name, dt in data.dtypes.to_dict().items():
+            if isinstance(dt, pd.CategoricalDtype):
+                mapper = data[name].value_counts().index.tolist()
+                meta.append({
+                    "name": name,
+                    "type": 'CATEGORICAL',
+                    "size": len(mapper),
+                    "i2s": mapper
+                })
+            else:
+                meta.append({
+                    "name": name,
+                    "type": 'CONTINOUS',
+                    "min": data[name].min(),
+                    "max": data[name].max(),
+                })
+
+    def fit(self, data):
+        raise NotImplementedError
+
+    def transform(self, data):
+        raise NotImplementedError
+
+    def inverse_transform(self, data):
+        raise NotImplementedError
+
+
+class DiscretizeTransformer(Transformer):
     """Discretize continuous columns into several bins.
 
     Transformation result is a int array.
 
     """
-    def __init__(self, meta, n_bins):
-        self.meta = meta
-        self.c_index = [id for id, info in enumerate(meta) if info['type'] == CONTINUOUS]
-        self.kbin_discretizer = KBinsDiscretizer(
-            n_bins=n_bins, encode='ordinal', strategy='uniform')
+    def __init__(self, n_bins):
+        self.n_bins = n_bins
+        self.meta = None
+        self.c_index = None
+        self.kbin_discretizer = None
 
     def fit(self, data):
+        self.meta = self.get_metadata(data)
+        self.columns = data.columns
+        data = data.values
+        self.column_index = [index for index, info in enumerate(self.meta) if info.get('i2s')]
+        self.kbin_discretizer = KBinsDiscretizer(
+            n_bins=self.n_bins, encode='ordinal', strategy='uniform')
+
         if self.c_index == []:
             return
+
         self.kbin_discretizer.fit(data[:, self.c_index])
 
     def transform(self, data):
@@ -36,25 +78,27 @@ class DiscretizeTransformer(object):
 
         data_t = data.copy().astype('float32')
         data_t[:, self.c_index] = self.kbin_discretizer.inverse_transform(data[:, self.c_index])
-        return data_t
+        return pd.DataFrame(data_t, columns=self.columns)
 
 
-class GeneralTransformer(object):
+class GeneralTransformer(Transformer):
     """Continuous and ordinal columns are normalized to [0, 1].
     Discrete columns are converted to a one-hot vector.
     """
     def __init__(self, meta, act='sigmoid'):
         self.act = act
-        self.meta = meta
+        self.meta = None
+        self.output_dim = None
+
+    def fit(self, data):
+        self.meta = self.get_metadata(data)
+        self.columns = data.columns
         self.output_dim = 0
         for info in self.meta:
             if info['type'] in [CONTINUOUS, ORDINAL]:
                 self.output_dim += 1
             else:
                 self.output_dim += info['size']
-
-    def fit(self, data):
-        pass
 
     def transform(self, data):
         data_t = []

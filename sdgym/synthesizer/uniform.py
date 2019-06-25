@@ -23,10 +23,3 @@ class UniformSynthesizer(SynthesizerBase):
                 data[:, i] = (data[:, i] * (1-1e-8) * c['size']).astype('int32')
 
         return [(0, data.astype(self.dtype))]
-
-    def init(self, meta, working_dir):
-        self.meta = meta
-
-
-if __name__ == "__main__":
-    run(UniformSynthesizer())

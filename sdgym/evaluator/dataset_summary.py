@@ -4,21 +4,8 @@ import json
 import numpy as np
 import pandas as pd
 
-summary = {
-    "type": [],
-    "name": [],
-    "#train": [],
-    "#test": [],
-    "#column": [],
-    "#continuous": [],
-    "#ordinal": [],
-    "#binary": [],
-    "#multi": [],
-    "task": []
-}
 
-def proc(dataset, dataset_type):
-    global summary
+def process_dataset(dataset, dataset_type, summary):
     summary["type"].append(dataset_type)
     summary['name'].append(dataset.split('/')[-1][:-4])
 
@@ -38,13 +25,26 @@ def proc(dataset, dataset_type):
 if __name__ == "__main__":
     datasets = glob.glob("data/simulated/*.npz")
     datasets = sorted(datasets)
+    summary = {
+        "type": [],
+        "name": [],
+        "#train": [],
+        "#test": [],
+        "#column": [],
+        "#continuous": [],
+        "#ordinal": [],
+        "#binary": [],
+        "#multi": [],
+        "task": []
+    }
+
     for dataset in datasets:
-        proc(dataset, "simulated")
+        process_dataset(dataset, "simulated")
 
     datasets = glob.glob("data/real/*.npz")
     datasets = sorted(datasets)
     for dataset in datasets:
-        proc(dataset, "real")
+        process_dataset(dataset, "real")
 
     df = pd.DataFrame(summary)
     df.to_csv('dataset.csv', index=None)
