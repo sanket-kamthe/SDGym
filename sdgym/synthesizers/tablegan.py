@@ -1,88 +1,49 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-from .synthesizer_base import SynthesizerBase, run
-from .synthesizer_utils import CATEGORICAL, ORDINAL, CONTINUOUS
-from sklearn.mixture import GaussianMixture
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.utils.data
-import torch.nn.functional as F
-import torch.optim as optim
 import os
 
+import numpy as np
+import torch
+from torch.nn import (
+    BatchNorm2d, Conv2d, ConvTranspose2d, LeakyReLU, Module, ReLU, Sequential, Sigmoid, Tanh, init)
+from torch.nn.functional import binary_cross_entropy_with_logits
+from torch.optim import Adam
+from torch.utils.data import DataLoader, TensorDataset
 
-class TableganTransformer(object):
-    def __init__(self, meta, side):
-        self.meta = meta
-        self.minn = np.zeros(len(meta))
-        self.maxx = np.zeros(len(meta))
-        for i in range(len(meta)):
-            if meta[i]['type'] == CONTINUOUS:
-                self.minn[i] = meta[i]['min'] - 1e-3
-                self.maxx[i] = meta[i]['max'] + 1e-3
-            else:
-                self.minn[i] = -1e-3
-                self.maxx[i] = meta[i]['size'] - 1 + 1e-3
-
-        self.height = side
-
-    def fit(self, data):
-        pass
-
-    def transform(self, data):
-        data = data.copy().astype('float32')
-        data = (data - self.minn) / (self.maxx - self.minn) * 2 - 1
-        if self.height * self.height > len(data[0]):
-            padding = np.zeros((len(data), self.height * self.height - len(data[0])))
-            data = np.concatenate([data, padding], axis=1)
-        return data.reshape(-1, 1, self.height, self.height)
-
-    def inverse_transform(self, data):
-        data = data.reshape(-1, self.height * self.height)
-
-        data_t = np.zeros([len(data), len(self.meta)])
-
-        for id_, info in enumerate(self.meta):
-            data_t[:, id_] = (data[:, id_].reshape([-1]) + 1) / 2 * (self.maxx[id_] - self.minn[id_]) + self.minn[id_]
-            if info['type'] in [CATEGORICAL, ORDINAL]:
-                data_t[:, id_] = np.round(data_t[:, id_])
-
-        return data_t
+from sdgym.synthesizers.base import SynthesizerBase
+from sdgym.synthesizers.utils import TableganTransformer, CATEGORICAL, CONTINUOUS, ORDINAL
 
 
-class Discriminator(nn.Module):
+class Discriminator(Module):
     def __init__(self, meta, side, layers):
         super(Discriminator, self).__init__()
         self.meta = meta
         self.side = side
-        self.seq = nn.Sequential(*layers)
+        self.seq = Sequential(*layers)
         # self.layers = layers
 
     def forward(self, input):
         return self.seq(input)
 
 
-class Generator(nn.Module):
+class Generator(Module):
     def __init__(self, meta, side, layers):
         super(Generator, self).__init__()
         self.meta = meta
         self.side = side
-        self.seq = nn.Sequential(*layers)
+        self.seq = Sequential(*layers)
         # self.layers = layers
 
     def forward(self, input_):
         return self.seq(input_)
 
 
-
-class Classifier(nn.Module):
+class Classifier(Module):
     def __init__(self, meta, side, layers, device):
         super(Classifier, self).__init__()
         self.meta = meta
         self.side = side
-        self.seq = nn.Sequential(*layers)
+        self.seq = Sequential(*layers)
         self.valid = True
         if meta[-1]['name'] != 'label' or meta[-1]['type'] != CATEGORICAL or meta[-1]['size'] != 2:
             self.valid = False
@@ -91,8 +52,6 @@ class Classifier(nn.Module):
         index = len(self.meta) - 1
         self.r = index // side
         self.c = index % side
-        # print(side, index, self.r, self.c)
-        # assert 0
         masking[0, 0, self.r, self.c] = 0
         self.masking = torch.from_numpy(masking).to(device)
 
@@ -114,28 +73,36 @@ def determine_layers(side, randomDim, numChannels):
 
     layers_D = []
     for prev, curr in zip(layer_dims, layer_dims[1:]):
-        layers_D += [nn.Conv2d(prev[0], curr[0], 4, 2, 1, bias=False),
-                     nn.BatchNorm2d(curr[0]),
-                     nn.LeakyReLU(0.2, inplace=True)]
-    layers_D += [nn.Conv2d(layer_dims[-1][0], 1, layer_dims[-1][1], 1, 0),
-                 nn.Sigmoid()]
+        layers_D += [
+            Conv2d(prev[0], curr[0], 4, 2, 1, bias=False),
+            BatchNorm2d(curr[0]),
+            LeakyReLU(0.2, inplace=True)
+        ]
+    layers_D += [
+        Conv2d(layer_dims[-1][0], 1, layer_dims[-1][1], 1, 0),
+        Sigmoid()
+    ]
 
-    layers_G = [nn.ConvTranspose2d(randomDim, layer_dims[-1][0], layer_dims[-1][1], 1, 0,
-                                   output_padding=0, bias=False)]
+    layers_G = [ConvTranspose2d(
+        randomDim, layer_dims[-1][0], layer_dims[-1][1], 1, 0,output_padding=0, bias=False)]
 
     for prev, curr in zip(reversed(layer_dims), reversed(layer_dims[:-1])):
-        layers_G += [nn.BatchNorm2d(prev[0]),
-                     nn.ReLU(True),
-                     nn.ConvTranspose2d(prev[0], curr[0], 4, 2, 1,
-                                        output_padding=0, bias=True)]
-    layers_G += [nn.Tanh()]
+        layers_G += [
+            BatchNorm2d(prev[0]),
+            ReLU(True),
+            ConvTranspose2d(prev[0], curr[0], 4, 2, 1, output_padding=0, bias=True)
+        ]
+    layers_G += [Tanh()]
 
     layers_C = []
     for prev, curr in zip(layer_dims, layer_dims[1:]):
-        layers_C += [nn.Conv2d(prev[0], curr[0], 4, 2, 1, bias=False),
-                     nn.BatchNorm2d(curr[0]),
-                     nn.LeakyReLU(0.2, inplace=True)]
-    layers_C += [nn.Conv2d(layer_dims[-1][0], 1, layer_dims[-1][1], 1, 0)]
+        layers_C += [
+            Conv2d(prev[0], curr[0], 4, 2, 1, bias=False),
+            BatchNorm2d(curr[0]),
+            LeakyReLU(0.2, inplace=True)
+        ]
+    
+    layers_C += [Conv2d(layer_dims[-1][0], 1, layer_dims[-1][1], 1, 0)]
 
     return layers_D, layers_G, layers_C
 
@@ -143,10 +110,11 @@ def determine_layers(side, randomDim, numChannels):
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
+        init.normal_(m.weight.data, 0.0, 0.02)
+    
     elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
+        init.normal_(m.weight.data, 1.0, 0.02)
+        init.constant_(m.bias.data, 0)
 
 
 class TableganSynthesizer(SynthesizerBase):
@@ -172,8 +140,8 @@ class TableganSynthesizer(SynthesizerBase):
         # print(train_data[:3, 0, :, :])
         # assert 0
         train_data = torch.from_numpy(train_data.astype('float32')).to(self.device)
-        dataset = torch.utils.data.TensorDataset(train_data)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
+        dataset = TensorDataset(train_data)
+        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         layers_D, layers_G, layers_C = determine_layers(self.side, self.randomDim, self.numChannels)
 
@@ -181,9 +149,9 @@ class TableganSynthesizer(SynthesizerBase):
         discriminator = Discriminator(self.meta, self.side, layers_D).to(self.device)
         classifier = Classifier(self.meta, self.side, layers_C, self.device).to(self.device)
 
-        optimizerG = optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
-        optimizerD = optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
-        optimizerC = optim.Adam(classifier.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
+        optimizerG = Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
+        optimizerD = Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
+        optimizerC = Adam(classifier.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
 
         generator.apply(weights_init)
         discriminator.apply(weights_init)
@@ -228,8 +196,8 @@ class TableganSynthesizer(SynthesizerBase):
                     # assert 0
                     fake_pre, fake_label = classifier(fake)
                     # print(real_pre, real_label)
-                    loss_cc = F.binary_cross_entropy_with_logits(real_pre, real_label)
-                    loss_cg = F.binary_cross_entropy_with_logits(fake_pre, fake_label)
+                    loss_cc = binary_cross_entropy_with_logits(real_pre, real_label)
+                    loss_cg = binary_cross_entropy_with_logits(fake_pre, fake_label)
 
                     optimizerG.zero_grad()
                     loss_cg.backward()
@@ -242,13 +210,13 @@ class TableganSynthesizer(SynthesizerBase):
                 else:
                     loss_c = None
 
-                if((id_+1) % 50 == 0):
-                    print("epoch", i+1, "step", id_+1, loss_d, loss_g, loss_c)
-            if i+1 in self.store_epoch:
+                if((id_ + 1) % 50 == 0):
+                    print("epoch", i + 1, "step", id_ + 1, loss_d, loss_g, loss_c)
+            if i + 1 in self.store_epoch:
                 torch.save({
                     "generator": generator.state_dict(),
                     "discriminator": discriminator.state_dict(),
-                }, "{}/model_{}.tar".format(self.working_dir, i+1))
+                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
     def generate(self, n):
         _, self.layers_G, _ = determine_layers(self.side, self.randomDim, self.numChannels)
@@ -267,22 +235,23 @@ class TableganSynthesizer(SynthesizerBase):
             for i in range(steps):
                 noise = torch.randn(self.batch_size, self.randomDim, 1, 1, device=self.device)
                 fake = generator(noise)
-                # print(fake.size())
                 data.append(fake.detach().cpu().numpy())
-            # print(data)
+
             data = np.concatenate(data, axis=0)
             data = self.transformer.inverse_transform(data[:n])
-            # print(data.shape)
             ret.append((epoch, data))
+
         return ret
 
     def init(self, meta, working_dir):
         self.meta = meta
         self.working_dir = working_dir
+
         try:
             os.mkdir(working_dir)
-        except:
+        except Exception:
             pass
+
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         sides = [4, 8, 16, 24, 32]
@@ -291,7 +260,3 @@ class TableganSynthesizer(SynthesizerBase):
                 self.side = i
                 break
         # figure out image size
-
-
-if __name__ == "__main__":
-    run(TableganSynthesizer())

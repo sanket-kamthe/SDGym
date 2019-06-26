@@ -4,12 +4,13 @@ import pandas as pd
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
 
-from sdgym.utils import ORDINAL, CONTINUOUS
+from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 
 
 class Transformer:
 
-    def get_metadata(self, data):
+    @staticmethod
+    def get_metadata(data):
         meta = []
 
         for name, dt in data.dtypes.to_dict().items():
@@ -17,17 +18,19 @@ class Transformer:
                 mapper = data[name].value_counts().index.tolist()
                 meta.append({
                     "name": name,
-                    "type": 'CATEGORICAL',
+                    "type": CATEGORICAL,
                     "size": len(mapper),
                     "i2s": mapper
                 })
             else:
                 meta.append({
                     "name": name,
-                    "type": 'CONTINOUS',
+                    "type": CONTINUOUS,
                     "min": data[name].min(),
                     "max": data[name].max(),
                 })
+
+        return meta
 
     def fit(self, data):
         raise NotImplementedError
@@ -42,43 +45,46 @@ class Transformer:
 class DiscretizeTransformer(Transformer):
     """Discretize continuous columns into several bins.
 
+    Attributes
+
     Transformation result is a int array.
 
     """
     def __init__(self, n_bins):
         self.n_bins = n_bins
         self.meta = None
-        self.c_index = None
-        self.kbin_discretizer = None
+        self.column_index = None
+        self.discretizer = None
 
     def fit(self, data):
         self.meta = self.get_metadata(data)
         self.columns = data.columns
         data = data.values
-        self.column_index = [index for index, info in enumerate(self.meta) if info.get('i2s')]
-        self.kbin_discretizer = KBinsDiscretizer(
+        self.column_index = [
+            index for index, info in enumerate(self.meta) if info['type'] == CONTINUOUS]
+        self.discretizer = KBinsDiscretizer(
             n_bins=self.n_bins, encode='ordinal', strategy='uniform')
 
-        if self.c_index == []:
+        if not self.column_index:
             return
 
-        self.kbin_discretizer.fit(data[:, self.c_index])
+        self.discretizer.fit(data[:, self.column_index])
 
     def transform(self, data):
-        if self.c_index == []:
+        if self.column_index == []:
             return data.astype('int')
 
-        data_t = data.copy()
-        data_t[:, self.c_index] = self.kbin_discretizer.transform(data[:, self.c_index])
-        return data_t.astype('int')
+        data = data.values
+        data[:, self.column_index] = self.discretizer.transform(data[:, self.column_index])
+        return pd.DataFrame(data.astype('int'), columns=self.columns)
 
     def inverse_transform(self, data):
-        if self.c_index == []:
+        if self.column_index == []:
             return data
 
-        data_t = data.copy().astype('float32')
-        data_t[:, self.c_index] = self.kbin_discretizer.inverse_transform(data[:, self.c_index])
-        return pd.DataFrame(data_t, columns=self.columns)
+        data = data.astype('float32').values
+        data[:, self.column_index] = self.discretizer.inverse_transform(data[:, self.column_index])
+        return pd.DataFrame(data, columns=self.columns)
 
 
 class GeneralTransformer(Transformer):
@@ -157,7 +163,7 @@ class GeneralTransformer(Transformer):
         return data_t
 
 
-class GMMTransformer(object):
+class GMMTransformer(Transformer):
     """
     Continuous columns are modeled with a GMM.
         and then normalized to a scalor [0, 1] and a n_cluster dimensional vector.
@@ -243,7 +249,7 @@ class GMMTransformer(object):
         return data_t
 
 
-class BGMTransformer(object):
+class BGMTransformer(Transformer):
     """Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
 
     Discrete and ordinal columns are converted to a one-hot vector.
@@ -350,5 +356,44 @@ class BGMTransformer(object):
                 current = data[:, st:st + info['size']]
                 st += info['size']
                 data_t[:, id_] = np.argmax(current, axis=1)
+
+        return data_t
+
+class TableganTransformer:
+    
+    def __init__(self, meta, side):
+        self.meta = meta
+        self.minn = np.zeros(len(meta))
+        self.maxx = np.zeros(len(meta))
+        for i in range(len(meta)):
+            if meta[i]['type'] == CONTINUOUS:
+                self.minn[i] = meta[i]['min'] - 1e-3
+                self.maxx[i] = meta[i]['max'] + 1e-3
+            else:
+                self.minn[i] = -1e-3
+                self.maxx[i] = meta[i]['size'] - 1 + 1e-3
+
+        self.height = side
+
+    def fit(self, data):
+        pass
+
+    def transform(self, data):
+        data = data.copy().astype('float32')
+        data = (data - self.minn) / (self.maxx - self.minn) * 2 - 1
+        if self.height * self.height > len(data[0]):
+            padding = np.zeros((len(data), self.height * self.height - len(data[0])))
+            data = np.concatenate([data, padding], axis=1)
+        return data.reshape(-1, 1, self.height, self.height)
+
+    def inverse_transform(self, data):
+        data = data.reshape(-1, self.height * self.height)
+
+        data_t = np.zeros([len(data), len(self.meta)])
+
+        for id_, info in enumerate(self.meta):
+            data_t[:, id_] = (data[:, id_].reshape([-1]) + 1) / 2 * (self.maxx[id_] - self.minn[id_]) + self.minn[id_]
+            if info['type'] in [CATEGORICAL, ORDINAL]:
+                data_t[:, id_] = np.round(data_t[:, id_])
 
         return data_t
