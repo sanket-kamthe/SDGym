@@ -73,12 +73,21 @@ class DiscretizeTransformer(Transformer):
         self.discretizer.fit(data[:, self.column_index])
 
     def transform(self, data):
+        """Transform data discretizing continous values.
+
+        Args:
+            data(pandas.DataFrame)
+
+        Returns:
+            numpy.ndarray
+
+        """
         if self.column_index == []:
             return data.astype('int')
 
         data = data.values
         data[:, self.column_index] = self.discretizer.transform(data[:, self.column_index])
-        return pd.DataFrame(data.astype('int'), columns=self.columns)
+        return data.astype('int')
 
     def inverse_transform(self, data):
         if self.column_index == []:
