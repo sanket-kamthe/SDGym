@@ -11,7 +11,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 
 from sdgym.synthesizers.base import SynthesizerBase
-from sdgym.synthesizers.utils import TableganTransformer, CATEGORICAL, CONTINUOUS, ORDINAL
+from sdgym.synthesizers.utils import CATEGORICAL, TableganTransformer
 
 
 class Discriminator(Module):
@@ -61,15 +61,13 @@ class Classifier(Module):
         return self.seq(input).view(-1), label
 
 
-def determine_layers(side, randomDim, numChannels):
+def determine_layers(side, random_dim, numChannels):
     assert side >= 4 and side <= 32
 
     layer_dims = [(1, side), (numChannels, side // 2)]
 
     while layer_dims[-1][1] > 3 and len(layer_dims) < 4:
         layer_dims.append((layer_dims[-1][0] * 2, layer_dims[-1][1] // 2))
-
-    # print(layer_dims)
 
     layers_D = []
     for prev, curr in zip(layer_dims, layer_dims[1:]):
@@ -83,8 +81,10 @@ def determine_layers(side, randomDim, numChannels):
         Sigmoid()
     ]
 
-    layers_G = [ConvTranspose2d(
-        randomDim, layer_dims[-1][0], layer_dims[-1][1], 1, 0,output_padding=0, bias=False)]
+    layers_G = [
+        ConvTranspose2d(
+            random_dim, layer_dims[-1][0], layer_dims[-1][1], 1, 0, output_padding=0, bias=False)
+    ]
 
     for prev, curr in zip(reversed(layer_dims), reversed(layer_dims[:-1])):
         layers_G += [
@@ -101,7 +101,7 @@ def determine_layers(side, randomDim, numChannels):
             BatchNorm2d(curr[0]),
             LeakyReLU(0.2, inplace=True)
         ]
-    
+
     layers_C += [Conv2d(layer_dims[-1][0], 1, layer_dims[-1][1], 1, 0)]
 
     return layers_D, layers_G, layers_C
@@ -111,7 +111,7 @@ def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         init.normal_(m.weight.data, 0.0, 0.02)
-    
+
     elif classname.find('BatchNorm') != -1:
         init.normal_(m.weight.data, 1.0, 0.02)
         init.constant_(m.bias.data, 0)
@@ -121,13 +121,13 @@ class TableganSynthesizer(SynthesizerBase):
     """docstring for TableganSynthesizer??"""
 
     def __init__(self,
-                 randomDim=100,
+                 random_dim=100,
                  numChannels=64,
                  l2scale=1e-5,
                  batch_size=500,
                  store_epoch=[300]):
 
-        self.randomDim = randomDim
+        self.random_dim = random_dim
         self.numChannels = numChannels
         self.l2scale = l2scale
 
@@ -137,21 +137,21 @@ class TableganSynthesizer(SynthesizerBase):
     def train(self, train_data):
         self.transformer = TableganTransformer(self.meta, self.side)
         train_data = self.transformer.transform(train_data)
-        # print(train_data[:3, 0, :, :])
-        # assert 0
         train_data = torch.from_numpy(train_data.astype('float32')).to(self.device)
         dataset = TensorDataset(train_data)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
-        layers_D, layers_G, layers_C = determine_layers(self.side, self.randomDim, self.numChannels)
+        layers_D, layers_G, layers_C = determine_layers(
+            self.side, self.random_dim, self.numChannels)
 
         generator = Generator(self.meta, self.side, layers_G).to(self.device)
         discriminator = Discriminator(self.meta, self.side, layers_D).to(self.device)
         classifier = Classifier(self.meta, self.side, layers_C, self.device).to(self.device)
 
-        optimizerG = Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
-        optimizerD = Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
-        optimizerC = Adam(classifier.parameters(), lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
+        optimizer_params = dict(lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
+        optimizerG = Adam(generator.parameters(), **optimizer_params)
+        optimizerD = Adam(discriminator.parameters(), **optimizer_params)
+        optimizerC = Adam(classifier.parameters(), **optimizer_params)
 
         generator.apply(weights_init)
         discriminator.apply(weights_init)
@@ -162,20 +162,18 @@ class TableganSynthesizer(SynthesizerBase):
         for i in range(max_epoch):
             for id_, data in enumerate(loader):
                 real = data[0].to(self.device)
-                noise = torch.randn(self.batch_size, self.randomDim, 1, 1, device=self.device)
+                noise = torch.randn(self.batch_size, self.random_dim, 1, 1, device=self.device)
                 fake = generator(noise)
 
                 optimizerD.zero_grad()
                 y_real = discriminator(real)
                 y_fake = discriminator(fake)
-                loss_d = -(torch.log(y_real + 1e-4).mean()) - (torch.log(1. - y_fake + 1e-4).mean())
+                loss_d = (
+                    -(torch.log(y_real + 1e-4).mean()) - (torch.log(1. - y_fake + 1e-4).mean()))
                 loss_d.backward()
                 optimizerD.step()
 
-                # print(real.size())
-                # print(fake.size())
-
-                noise = torch.randn(self.batch_size, self.randomDim, 1, 1, device=self.device)
+                noise = torch.randn(self.batch_size, self.random_dim, 1, 1, device=self.device)
                 fake = generator(noise)
                 optimizerG.zero_grad()
                 y_fake = discriminator(fake)
@@ -187,15 +185,12 @@ class TableganSynthesizer(SynthesizerBase):
                 loss_info.backward()
                 optimizerG.step()
 
-                noise = torch.randn(self.batch_size, self.randomDim, 1, 1, device=self.device)
+                noise = torch.randn(self.batch_size, self.random_dim, 1, 1, device=self.device)
                 fake = generator(noise)
                 if classifier.valid:
-                    # print(real[:5, :, 3, 2])
                     real_pre, real_label = classifier(real)
-                    # print(real_label)
-                    # assert 0
                     fake_pre, fake_label = classifier(fake)
-                    # print(real_pre, real_label)
+
                     loss_cc = binary_cross_entropy_with_logits(real_pre, real_label)
                     loss_cg = binary_cross_entropy_with_logits(fake_pre, fake_label)
 
@@ -219,7 +214,7 @@ class TableganSynthesizer(SynthesizerBase):
                 }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
     def generate(self, n):
-        _, self.layers_G, _ = determine_layers(self.side, self.randomDim, self.numChannels)
+        _, self.layers_G, _ = determine_layers(self.side, self.random_dim, self.numChannels)
         generator = Generator(self.meta, self.side, self.layers_G).to(self.device)
 
         ret = []
@@ -233,7 +228,7 @@ class TableganSynthesizer(SynthesizerBase):
             steps = n // self.batch_size + 1
             data = []
             for i in range(steps):
-                noise = torch.randn(self.batch_size, self.randomDim, 1, 1, device=self.device)
+                noise = torch.randn(self.batch_size, self.random_dim, 1, 1, device=self.device)
                 fake = generator(noise)
                 data.append(fake.detach().cpu().numpy())
 

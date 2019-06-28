@@ -1,7 +1,6 @@
 import numpy as np
 
-from sdgym.synthesizers.base import SynthesizerBase, run
-
+from sdgym.synthesizers.base import SynthesizerBase
 
 rng = np.random
 
@@ -20,6 +19,6 @@ class UniformSynthesizer(SynthesizerBase):
             if c['type'] == 'continuous':
                 data[:, i] = data[:, i] * (c['max'] - c['min']) + c['min']
             else:
-                data[:, i] = (data[:, i] * (1-1e-8) * c['size']).astype('int32')
+                data[:, i] = (data[:, i] * (1 - 1e-8) * c['size']).astype('int32')
 
         return [(0, data.astype(self.dtype))]

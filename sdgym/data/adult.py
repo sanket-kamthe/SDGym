@@ -1,12 +1,12 @@
 # Generate adult datasets
 
-import os
 import json
+import os
+
 import numpy as np
 import pandas as pd
 
-from ..utils import CATEGORICAL, CONTINUOUS, ORDINAL, verify
-
+from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL, verify
 
 output_dir = "data/real/"
 temp_dir = "tmp/"
@@ -27,24 +27,26 @@ def project_table(data, meta):
 
 
 if __name__ == "__main__":
-    try:
-        s.mkdir(output_dir)
-    except:
-        pass
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
 
-    try:
+    if os.path.isdir(temp_dir):
         os.mkdir(temp_dir)
-    except:
-        pass
 
     df = pd.read_csv("data/raw/adult/adult.data", dtype='str', header=-1)
     df = df.apply(lambda x: x.str.strip(' \t.'))
+
+    education_levels = [
+        "Preschool", "1st-4th", "5th-6th", "7th-8th", "9th", "10th",
+        "11th", "12th", "HS-grad", "Prof-school", "Assoc-voc", "Assoc-acdm",
+        "Some-college", "Bachelors", "Masters", "Doctorate"
+    ]
 
     col_type = [
         ("age", CONTINUOUS),
         ("workclass", CATEGORICAL),
         ("fnlwgt", CONTINUOUS),
-        ("education", ORDINAL, ["Preschool", "1st-4th", "5th-6th", "7th-8th", "9th", "10th", "11th", "12th", "HS-grad", "Prof-school", "Assoc-voc", "Assoc-acdm", "Some-college", "Bachelors", "Masters", "Doctorate"]),
+        ("education", ORDINAL, education_levels),
         ("education-num", CONTINUOUS),
         ("marital-status", CATEGORICAL),
         ("occupation", CATEGORICAL),
@@ -82,7 +84,6 @@ if __name__ == "__main__":
                 "i2s": mapper
             })
 
-
     tdata = project_table(df, meta)
 
     np.random.seed(0)
@@ -96,5 +97,4 @@ if __name__ == "__main__":
         json.dump(meta, f, sort_keys=True, indent=4, separators=(',', ': '))
     np.savez("{}/{}.npz".format(output_dir, name), train=t_train, test=t_test)
 
-    verify("{}/{}.npz".format(output_dir, name),
-            "{}/{}.json".format(output_dir, name))
+    verify("{}/{}.npz".format(output_dir, name), "{}/{}.json".format(output_dir, name))

@@ -1,27 +1,23 @@
 # Generate covtype datasets
 
-import os
 import json
+import os
+
 import numpy as np
 import pandas as pd
 
 from sdgym.utils import CATEGORICAL, CONTINUOUS, verify
-
 
 output_dir = "data/real/"
 temp_dir = "tmp/"
 
 
 if __name__ == "__main__":
-    try:
+    if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
-    except:
-        pass
 
-    try:
+    if not os.path.isdir(temp_dir):
         os.mkdir(temp_dir)
-    except:
-        pass
 
     df = pd.read_csv("data/raw/covtype/covtype.data", dtype='str', header=-1)
 
@@ -66,7 +62,6 @@ if __name__ == "__main__":
                 "i2s": mapper
             })
 
-
     tdata = df.values.astype('float32')
     tdata[:, -1] -= 1
 
@@ -81,5 +76,4 @@ if __name__ == "__main__":
         json.dump(meta, f, sort_keys=True, indent=4, separators=(',', ': '))
     np.savez("{}/{}.npz".format(output_dir, name), train=t_train, test=t_test)
 
-    verify("{}/{}.npz".format(output_dir, name),
-            "{}/{}.json".format(output_dir, name))
+    verify("{}/{}.npz".format(output_dir, name), "{}/{}.json".format(output_dir, name))

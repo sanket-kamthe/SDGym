@@ -1,15 +1,12 @@
 import argparse
 import glob
-import itertools
 import json
 import logging
 import os
 
 import numpy as np
 from pomegranate import BayesianNetwork
-from scipy.stats import multivariate_normal
 from sklearn.ensemble import AdaBoostClassifier as ABC
-from sklearn.ensemble import AdaBoostRegressor as ABR
 from sklearn.linear_model import LinearRegression as LRR
 from sklearn.linear_model import LogisticRegression as LRC
 from sklearn.metrics import accuracy_score, f1_score, r2_score
@@ -17,44 +14,23 @@ from sklearn.mixture import GaussianMixture as GMM
 from sklearn.neural_network import MLPClassifier as MLPC
 from sklearn.neural_network import MLPRegressor as MLPR
 from sklearn.tree import DecisionTreeClassifier as DTC
-from sklearn.tree import DecisionTreeRegressor as DTR
-from sklearn.utils import shuffle
 
 from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 
 logging.basicConfig(level=logging.INFO)
 
-DATASET_EVALUATOR_MAP = {
-    "mnist12": default_multi_classification,
-    "mnist28": default_multi_classification,
-    "covtype": default_multi_classification,
-    "intrusion": default_multi_classification,
-    'credit': default_binary_classification,
-    'census': default_binary_classification,
-    'adult': default_binary_classification,
-    'news': news_regression,
-    'grid': default_gmm_likelihood,
-    'gridr': default_gmm_likelihood,
-    'ring': default_gmm_likelihood,
-    'asia': default_bayesian_likelihood,
-    'alarm': default_bayesian_likelihood,
-    'child': default_bayesian_likelihood,
-    'insurance': default_bayesian_likelihood,
-}
-
-
 BAYESIAN_PARAMETER = {
-
     'grid': 30,
-    'gridr': 30
-    'ring': 10
+    'gridr': 30,
+    'ring': 10,
 }
 
 
 def get_arg_parser():
-    parser = argparse.ArgumentParser( description='Evaluate output of one synthesizer.')
+    parser = argparse.ArgumentParser(description='Evaluate output of one synthesizer.')
     parser.add_argument('--result', type=str, default='output/__result__', help='result dir')
-    parser.add_argument('--force', dest='force', action='store_true', help='overwrite result', default=False)
+    parser.add_argument(
+        '--force', dest='force', action='store_true', help='overwrite result', default=False)
     parser.add_argument('synthetic', type=str, help='synthetic data folder')
 
     return parser
@@ -150,13 +126,16 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
                 else:
                     assert 0, 'unkown label type'
                 continue
+
             if cinfo['type'] == CONTINUOUS:
                 if cinfo['min'] >= 0 and cinfo['max'] >= 1e3:
-                    feature.append(np.log(max(col, 1e-2))) # log feature
+                    feature.append(np.log(max(col, 1e-2)))
                 else:
-                    feature.append((col - cinfo['min']) / (cinfo['max'] - cinfo['min']) * 5) #[0, 5]
+                    feature.append((col - cinfo['min']) / (cinfo['max'] - cinfo['min']) * 5)
+
             elif cinfo['type'] == ORDINAL:
                 feature.append(col)
+
             else:
                 if cinfo['size'] <= 2:
                     feature.append(col)
@@ -210,6 +189,7 @@ def get_models(dataset):
 
     assert 0
 
+
 def default_gmm_likelihood(trainset, testset, n):
     gmm = GMM(n, covariance_type='diag')
     gmm.fit(testset)
@@ -234,6 +214,7 @@ def mapper(data, meta):
         data_t.append(row_t)
     return data_t
 
+
 def default_bayesian_likelihood(dataset, trainset, testset, meta):
     struct = glob.glob("data/*/{}_structure.json".format(dataset))
     assert len(struct) == 1
@@ -245,17 +226,20 @@ def default_bayesian_likelihood(dataset, trainset, testset, meta):
     for item in trainset_mapped:
         try:
             prob.append(bn1.probability(item))
-        except:
+        except Exception:
             prob.append(1e-8)
+
     l1 = np.mean(np.log(np.asarray(prob) + 1e-8))
 
     bn2 = BayesianNetwork.from_structure(trainset_mapped, bn1.structure)
     prob = []
+
     for item in testset_mapped:
         try:
             prob.append(bn2.probability(item))
-        except:
+        except Exception:
             prob.append(1e-8)
+
     l2 = np.mean(np.log(np.asarray(prob) + 1e-8))
 
     return [{
@@ -276,12 +260,13 @@ def evalute_dataset(dataset, trainset, testset, meta):
     if dataset in ['asia', 'alarm', 'child', 'insurance']:
         return evaluator(dataset, trainset, testset, meta)
 
-    if dataset in ["mnist12", "mnist28", "covtype", "intrusion", 'credit', 'census', 'adult', 'news']:
+    if dataset in [
+            "mnist12", "mnist28", "covtype", "intrusion", 'credit', 'census', 'adult', 'news']:
         x_train, y_train = make_features(trainset, meta)
         x_test, y_test = make_features(testset, meta)
         return evaluator(x_train, y_train, x_test, y_test, get_models(dataset))
 
-    bayesian_parameter = BAYESIAN_PARAMETER.get(datasert)
+    bayesian_parameter = BAYESIAN_PARAMETER.get(dataset)
     if bayesian_parameter:
         return evaluator(trainset, testset, bayesian_parameter)
 
@@ -309,6 +294,25 @@ def compute_distance(trainset, syn, meta, sample=300):
         dis_all.append(distance)
 
     return np.mean(dis_all)
+
+
+DATASET_EVALUATOR_MAP = {
+    "mnist12": default_multi_classification,
+    "mnist28": default_multi_classification,
+    "covtype": default_multi_classification,
+    "intrusion": default_multi_classification,
+    'credit': default_binary_classification,
+    'census': default_binary_classification,
+    'adult': default_binary_classification,
+    'news': news_regression,
+    'grid': default_gmm_likelihood,
+    'gridr': default_gmm_likelihood,
+    'ring': default_gmm_likelihood,
+    'asia': default_bayesian_likelihood,
+    'alarm': default_bayesian_likelihood,
+    'child': default_bayesian_likelihood,
+    'insurance': default_bayesian_likelihood,
+}
 
 
 if __name__ == "__main__":

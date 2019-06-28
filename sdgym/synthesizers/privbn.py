@@ -1,16 +1,17 @@
-from .synthesizer_base import SynthesizerBase, run
-import json
-import numpy as np
 import os
-import subprocess
 import shutil
-from .synthesizer_utils import CONTINUOUS, ORDINAL, CATEGORICAL
+import subprocess
+
+import numpy as np
+
+from sdgym.synthesizers.base import SynthesizerBase
+from sdgym.synthesizers.utils import CATEGORICAL, ORDINAL
+
 
 def try_mkdirs(dir):
-    try:
+    if not os.path.isdir(dir):
         os.makedirs(dir)
-    except:
-        pass
+
 
 class PrivBNSynthesizer(SynthesizerBase):
     """docstring for IdentitySynthesizer."""
@@ -55,8 +56,10 @@ class PrivBNSynthesizer(SynthesizerBase):
                 for id_, col in enumerate(row):
                     if id_ in d_cols:
                         print(int(col), end=' ', file=f)
+
                     else:
                         print(col, end=' ', file=f)
+
                 print(file=f)
 
         privbayes = os.path.realpath("__privbn_tmp/privBayes.bin")
@@ -70,7 +73,3 @@ class PrivBNSynthesizer(SynthesizerBase):
 
     def init(self, meta, working_dir):
         self.meta = meta
-
-
-if __name__ == "__main__":
-    run(PrivBNSynthesizer())

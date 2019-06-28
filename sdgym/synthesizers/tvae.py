@@ -3,9 +3,9 @@ import os
 import numpy as np
 import torch
 from torch.functional import cross_entropy
-from torch.nn import Module, Linear, Parameter, ReLU, Sequential
-from torch.utils.data import TensorDataset, DataLoader
+from torch.nn import Linear, Module, Parameter, ReLU, Sequential
 from torch.optim import Adam
+from torch.utils.data import DataLoader, TensorDataset
 
 from sdgym.synthesizer_base import SynthesizerBase
 from sdgym.synthesizer_utils import BGMTransformer
@@ -105,8 +105,8 @@ class TVAESynthesizer(SynthesizerBase):
         encoder = Encoder(data_dim, self.compress_dims, self.embedding_dim).to(self.device)
         decoder = Decoder(self.embedding_dim, self.compress_dims, data_dim).to(self.device)
         optimizerAE = Adam(
-            list(encoder.parameters())
-            + list(decoder.parameters()), weight_decay=self.l2scale)
+            list(encoder.parameters()) + list(decoder.parameters()),
+            weight_decay=self.l2scale)
 
         max_epoch = max(self.store_epoch)
         for i in range(max_epoch):
@@ -122,13 +122,13 @@ class TVAESynthesizer(SynthesizerBase):
                 loss = loss_1 + loss_2
                 loss.backward()
                 optimizerAE.step()
-                decoder.sigma.data.clamp_(0.01, 1.)
-            print(i+1, loss_1, loss_2)
-            if i+1 in self.store_epoch:
+                decoder.sigma.data.clamp_(0.01, 1.0)
+            print(i + 1, loss_1, loss_2)
+            if i + 1 in self.store_epoch:
                 torch.save({
                     "encoder": encoder.state_dict(),
                     "decoder": decoder.state_dict()
-                }, "{}/model_{}.tar".format(self.working_dir, i+1))
+                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
     def sample(self, n):
         data_dim = self.transformer.output_dim
@@ -160,8 +160,7 @@ class TVAESynthesizer(SynthesizerBase):
         self.meta = meta
         self.working_dir = working_dir
 
-        try:
+        if not os.path.isdir(working_dir):
             os.mkdir(working_dir)
-        except:
-            pass
+
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

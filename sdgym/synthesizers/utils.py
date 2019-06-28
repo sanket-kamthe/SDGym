@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
-
+from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 from sklearn.preprocessing import KBinsDiscretizer
-from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
 
 from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 
@@ -45,7 +44,10 @@ class Transformer:
 class DiscretizeTransformer(Transformer):
     """Discretize continuous columns into several bins.
 
-    Attributes
+    Attributes:
+        meta
+        column_index
+        discretizer(sklearn.preprocessing.KBinsDiscretizer)
 
     Transformation result is a int array.
 
@@ -58,7 +60,7 @@ class DiscretizeTransformer(Transformer):
 
     def fit(self, data):
         self.meta = self.get_metadata(data)
-        self.columns = data.columns
+        self.columns = list(data.columns)
         data = data.values
         self.column_index = [
             index for index, info in enumerate(self.meta) if info['type'] == CONTINUOUS]
@@ -82,7 +84,7 @@ class DiscretizeTransformer(Transformer):
         if self.column_index == []:
             return data
 
-        data = data.astype('float32').values
+        data = data.astype('float32')
         data[:, self.column_index] = self.discretizer.inverse_transform(data[:, self.column_index])
         return pd.DataFrame(data, columns=self.columns)
 
@@ -117,17 +119,20 @@ class GeneralTransformer(Transformer):
                     col = col * 2 - 1
                 data_t.append(col.reshape([-1, 1]))
                 self.output_info.append((1, self.act))
+
             elif info['type'] == ORDINAL:
                 col = col / info['size']
                 if self.act == 'tanh':
                     col = col * 2 - 1
                 data_t.append(col.reshape([-1, 1]))
                 self.output_info.append((1, self.act))
+
             else:
                 col_t = np.zeros([len(data), info['size']])
                 col_t[np.arange(len(data)), col.astype('int32')] = 1
                 data_t.append(col_t)
                 self.output_info.append((info['size'], 'softmax'))
+
         return np.concatenate(data_t, axis=1)
 
     def inverse_transform(self, data):
@@ -231,6 +236,7 @@ class GMMTransformer(Transformer):
                 if sigmas is not None:
                     sig = sigmas[st]
                     u = np.random.normal(u, sig)
+
                 u = np.clip(u, -1, 1)
                 st += 1 + self.n_clusters
                 means = self.model[id_].means_.reshape([-1])
@@ -278,7 +284,7 @@ class BGMTransformer(Transformer):
                 model.append(gm)
                 comp = gm.weights_ > self.eps
                 self.components.append(comp)
-                print(np.sum(comp))
+
                 self.output_info += [(1, 'tanh'), (np.sum(comp), 'softmax')]
                 self.output_dim += 1 + np.sum(comp)
             else:
@@ -359,8 +365,9 @@ class BGMTransformer(Transformer):
 
         return data_t
 
-class TableganTransformer:
-    
+
+class TableganTransformer(Transformer):
+
     def __init__(self, meta, side):
         self.meta = meta
         self.minn = np.zeros(len(meta))
@@ -392,7 +399,10 @@ class TableganTransformer:
         data_t = np.zeros([len(data), len(self.meta)])
 
         for id_, info in enumerate(self.meta):
-            data_t[:, id_] = (data[:, id_].reshape([-1]) + 1) / 2 * (self.maxx[id_] - self.minn[id_]) + self.minn[id_]
+            numerator = (data[:, id_].reshape([-1]) + 1)
+            denominator = 2 * (self.maxx[id_] - self.minn[id_]) + self.minn[id_]
+
+            data_t[:, id_] = numerator / denominator
             if info['type'] in [CATEGORICAL, ORDINAL]:
                 data_t[:, id_] = np.round(data_t[:, id_])
 

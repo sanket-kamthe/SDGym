@@ -3,10 +3,9 @@ import json
 import os
 import re
 
-import pandas as pd
 import numpy as np
+from pomegranate import BayesianNetwork, ConditionalProbabilityTable, DiscreteDistribution, Node
 
-from pomegranate import DiscreteDistribution, ConditionalProbabilityTable, Node, BayesianNetwork
 from sdgym import utils
 
 
@@ -34,7 +33,7 @@ class MultivariateMaker(object):
 
                 flag = True
                 for parent in parents:
-                    if not parent in processing_order:
+                    if parent not in processing_order:
                         flag = False
 
                 if flag:
@@ -57,7 +56,7 @@ class MultivariateMaker(object):
                         tmp = data[_id, parents_map[i]]
                         try:
                             tmp = tmp.decode('utf8')
-                        except:
+                        except Exception:
                             pass
                         values[parents[i]] = tmp
                     data[_id, current] = distribution.sample(parent_values=values)
@@ -68,34 +67,38 @@ class MultivariateMaker(object):
         return data_t
 
 
-
-
 class ChainMaker(MultivariateMaker):
 
     def __init__(self):
-        A = DiscreteDistribution({'1': 1./3, '2': 1./3, '3': 1./3})
+        A = DiscreteDistribution({'1': 1.0 / 3, '2': 1.0 / 3, '3': 1.0 / 3})
         B = ConditionalProbabilityTable(
-            [['1','1',0.5],
-            ['1','2',0.5],
-            ['1','3',0],
-            ['2','1',0],
-            ['2','2',0.5],
-            ['2','3',0.5],
-            ['3','1',0.5],
-            ['3','2',0],
-            ['3','3',0.5],
-            ],[A])
+            [
+                ['1', '1', 0.5],
+                ['1', '2', 0.5],
+                ['1', '3', 0],
+                ['2', '1', 0],
+                ['2', '2', 0.5],
+                ['2', '3', 0.5],
+                ['3', '1', 0.5],
+                ['3', '2', 0],
+                ['3', '3', 0.5],
+            ],
+            [A]
+        )
         C = ConditionalProbabilityTable(
-            [['1','1',0.5],
-            ['1','2',0.5],
-            ['1','3',0],
-            ['2','1',0],
-            ['2','2',0.5],
-            ['2','3',0.5],
-            ['3','1',0.5],
-            ['3','2',0],
-            ['3','3',0.5],
-            ],[B])
+            [
+                ['1', '1', 0.5],
+                ['1', '2', 0.5],
+                ['1', '3', 0],
+                ['2', '1', 0],
+                ['2', '2', 0.5],
+                ['2', '3', 0.5],
+                ['3', '1', 0.5],
+                ['3', '2', 0],
+                ['3', '3', 0.5],
+            ],
+            [B]
+        )
 
         s1 = Node(A, name="A")
         s2 = Node(B, name="B")
@@ -115,35 +118,41 @@ class ChainMaker(MultivariateMaker):
                 "type": "categorical",
                 "size": 3,
                 "i2s": ['1', '2', '3']
-        })
+            })
         self.meta = meta
 
 
 class TreeMaker(MultivariateMaker):
     def __init__(self):
-        A = DiscreteDistribution({'1': 1./3, '2': 1./3, '3': 1./3})
+        A = DiscreteDistribution({'1': 1.0 / 3, '2': 1.0 / 3, '3': 1.0 / 3})
         B = ConditionalProbabilityTable(
-            [['1','1',0.5],
-            ['1','2',0.5],
-            ['1','3',0],
-            ['2','1',0],
-            ['2','2',0.5],
-            ['2','3',0.5],
-            ['3','1',0.5],
-            ['3','2',0],
-            ['3','3',0.5],
-            ],[A])
+            [
+                ['1', '1', 0.5],
+                ['1', '2', 0.5],
+                ['1', '3', 0],
+                ['2', '1', 0],
+                ['2', '2', 0.5],
+                ['2', '3', 0.5],
+                ['3', '1', 0.5],
+                ['3', '2', 0],
+                ['3', '3', 0.5],
+            ],
+            [A]
+        )
         C = ConditionalProbabilityTable(
-            [['1','4',0.5],
-            ['1','5',0.5],
-            ['1','6',0],
-            ['2','4',0],
-            ['2','5',0.5],
-            ['2','6',0.5],
-            ['3','4',0.5],
-            ['3','5',0],
-            ['3','6',0.5],
-            ],[A])
+            [
+                ['1', '4', 0.5],
+                ['1', '5', 0.5],
+                ['1', '6', 0],
+                ['2', '4', 0],
+                ['2', '5', 0.5],
+                ['2', '6', 0.5],
+                ['3', '4', 0.5],
+                ['3', '5', 0],
+                ['3', '6', 0.5],
+            ],
+            [A]
+        )
 
         s1 = Node(A, name="A")
         s2 = Node(B, name="B")
@@ -157,40 +166,47 @@ class TreeMaker(MultivariateMaker):
         self.model = model
 
         meta = []
-        for i in range(self.model.node_count()-1):
+        for i in range(self.model.node_count() - 1):
             meta.append({
                 "name": chr(ord('A') + i),
                 "type": "categorical",
                 "size": 3,
                 "i2s": ['1', '2', '3']
-        })
+            })
         meta.append({
-                "name": "C",
-                "type": "categorical",
-                "size": 3,
-                "i2s": ['4', '5', '6']
+            "name": "C",
+            "type": "categorical",
+            "size": 3,
+            "i2s": ['4', '5', '6']
         })
         self.meta = meta
+
 
 class FCMaker(MultivariateMaker):
     def __init__(self):
         Rain = DiscreteDistribution({'T': 0.2, 'F': 0.8})
         Sprinkler = ConditionalProbabilityTable(
-            [['F','T',0.4],
-            ['F','F',0.6],
-            ['T','T',0.1],
-            ['T','F',0.9],
-            ],[Rain])
+            [
+                ['F', 'T', 0.4],
+                ['F', 'F', 0.6],
+                ['T', 'T', 0.1],
+                ['T', 'F', 0.9],
+            ],
+            [Rain]
+        )
         Wet = ConditionalProbabilityTable(
-            [['F','F','T',0.01],
-            ['F','F','F',0.99],
-            ['F','T','T',0.8],
-            ['F','T','F',0.2],
-            ['T','F','T',0.9],
-            ['T','F','F',0.1],
-            ['T','T','T',0.99],
-            ['T','T','F',0.01],
-            ],[Sprinkler,Rain])
+            [
+                ['F', 'F', 'T', 0.01],
+                ['F', 'F', 'F', 0.99],
+                ['F', 'T', 'T', 0.8],
+                ['F', 'T', 'F', 0.2],
+                ['T', 'F', 'T', 0.9],
+                ['T', 'F', 'F', 0.1],
+                ['T', 'T', 'T', 0.99],
+                ['T', 'T', 'F', 0.01],
+            ],
+            [Sprinkler, Rain]
+        )
 
         s1 = Node(Rain, name="Rain")
         s2 = Node(Sprinkler, name="Sprinkler")
@@ -211,7 +227,8 @@ class FCMaker(MultivariateMaker):
                 "type": "categorical",
                 "size": 2,
                 "i2s": ['T', 'F']
-        })
+            })
+
         meta[0]['name'] = 'Rain'
         meta[1]['name'] = 'Sprinkler'
         meta[2]['name'] = 'Wet'
@@ -222,30 +239,37 @@ class GeneralMaker(MultivariateMaker):
     def __init__(self):
         Pollution = DiscreteDistribution({'F': 0.9, 'T': 0.1})
         Smoker = DiscreteDistribution({'T': 0.3, 'F': 0.7})
-        print(Smoker)
         Cancer = ConditionalProbabilityTable(
-            [['T','T','T',0.05],
-            ['T','T','F',0.95],
-            ['T','F','T',0.02],
-            ['T','F','F',0.98],
-            ['F','T','T',0.03],
-            ['F','T','F',0.97],
-            ['F','F','T',0.001],
-            ['F','F','F',0.999],
-            ],[Pollution,Smoker])
-        print(Cancer)
+            [
+                ['T', 'T', 'T', 0.05],
+                ['T', 'T', 'F', 0.95],
+                ['T', 'F', 'T', 0.02],
+                ['T', 'F', 'F', 0.98],
+                ['F', 'T', 'T', 0.03],
+                ['F', 'T', 'F', 0.97],
+                ['F', 'F', 'T', 0.001],
+                ['F', 'F', 'F', 0.999],
+            ],
+            [Pollution, Smoker]
+        )
         XRay = ConditionalProbabilityTable(
-            [['T','T',0.9],
-            ['T','F',0.1],
-            ['F','T',0.2],
-            ['F','F',0.8],
-            ],[Cancer])
+            [
+                ['T', 'T', 0.9],
+                ['T', 'F', 0.1],
+                ['F', 'T', 0.2],
+                ['F', 'F', 0.8],
+            ],
+            [Cancer]
+        )
         Dyspnoea = ConditionalProbabilityTable(
-            [['T','T',0.65],
-            ['T','F',0.35],
-            ['F','T',0.3],
-            ['F','F',0.7],
-            ],[Cancer])
+            [
+                ['T', 'T', 0.65],
+                ['T', 'F', 0.35],
+                ['F', 'T', 0.3],
+                ['F', 'F', 0.7],
+            ],
+            [Cancer]
+        )
         s1 = Node(Pollution, name="Pollution")
         s2 = Node(Smoker, name="Smoker")
         s3 = Node(Cancer, name="Cancer")
@@ -269,13 +293,16 @@ class GeneralMaker(MultivariateMaker):
                 "type": "categorical",
                 "size": 2,
                 "i2s": ['T', 'F']
-        })
+            })
+
         self.meta = meta
+
 
 class BIFMaker(MultivariateMaker):
     def __init__(self, filename):
         with open(filename) as f:
             bif = f.read()
+
         vars = re.findall(r"variable[^\{]+{[^\}]+}", bif)
         probs = re.findall(r"probability[^\{]+{[^\}]+}", bif)
 
@@ -293,12 +320,10 @@ class BIFMaker(MultivariateMaker):
             v_opts = m.group(2).replace(',', ' ').split()
 
             assert v_opts_n == len(v_opts)
-            # print(v_name, v_opts_n, v_opts)
 
             m = re.search(r"probability\s*\(([^)]+)\)", p)
             cond = m.group(1).replace('|', ' ').replace(',', ' ').split()
             assert cond[0] == v_name
-            # print(cond)
 
             self.meta.append({
                 "name": v_name,
@@ -316,7 +341,6 @@ class BIFMaker(MultivariateMaker):
 
                 var_index_to_name.append(v_name)
                 tmp = DiscreteDistribution(margin_p)
-                # print(tmp)
                 var_nodes[v_name] = tmp
             else:
                 m_iter = re.finditer(r"\(([^)]*)\)([\s\d\.,\-e]+);", p)
@@ -334,16 +358,14 @@ class BIFMaker(MultivariateMaker):
                 var_index_to_name.append(v_name)
 
                 tmp = (cond_p_table, cond)
-                # print(tmp)
                 var_nodes[v_name] = tmp
                 for x in cond[1:]:
                     edges.append((x, v_name))
+
                 todo.add(v_name)
 
         while len(todo) > 0:
-            # print(todo)
             for v_name in todo:
-                # print(v_name, type(var_nodes[v_name]))
                 cond_p_table, cond = var_nodes[v_name]
                 flag = True
                 for y in cond[1:]:
@@ -360,24 +382,28 @@ class BIFMaker(MultivariateMaker):
             var_nodes[x] = Node(var_nodes[x], name=x)
 
         var_nodes_list = [var_nodes[x] for x in var_index_to_name]
-        # print(var_nodes_list)
         model = BayesianNetwork("tmp")
         model.add_states(*var_nodes_list)
 
         for edge in edges:
             model.add_edge(var_nodes[edge[0]], var_nodes[edge[1]])
         model.bake()
-        # print(model.to_json())
         self.model = model
 
 
 if __name__ == "__main__":
-    supported_distributions = {'chain': ChainMaker, 'tree': TreeMaker,'fc':FCMaker,'general': GeneralMaker}
+    supported_distributions = {
+        'chain': ChainMaker,
+        'tree': TreeMaker,
+        'fc': FCMaker,
+        'general': GeneralMaker
+    }
 
     parser = argparse.ArgumentParser(description='Generate simulated Data for a distribution')
-    parser.add_argument('distribution', type = str, help = 'specify type of distributions to sample from')
-    parser.add_argument('--sample', type=int, default=10000,
-                    help='maximum samples in the simulated data.')
+    parser.add_argument(
+        'distribution', type=str, help='specify type of distributions to sample from')
+    parser.add_argument(
+        '--sample', type=int, default=10000, help='maximum samples in the simulated data.')
 
     args = parser.parse_args()
     dist = args.distribution
@@ -399,14 +425,20 @@ if __name__ == "__main__":
     if not os.path.exists(output_dir):
         try:
             os.mkdir(output_dir)
-        except:
+        except Exception:
             pass
+
     # Store simulated data
     with open("{}/{}.json".format(output_dir, dist), 'w') as f:
         json.dump(maker.meta, f, sort_keys=True, indent=4, separators=(',', ': '))
+
     with open("{}/{}_structure.json".format(output_dir, dist), 'w') as f:
         f.write(maker.model.to_json())
-    np.savez("{}/{}.npz".format(output_dir, dist), train=samples[:len(samples)//2], test=samples[len(samples)//2:])
 
-    utils.verify("{}/{}.npz".format(output_dir, dist),
-        "{}/{}.json".format(output_dir, dist))
+    np.savez(
+        "{}/{}.npz".format(output_dir, dist),
+        train=samples[:len(samples) // 2],
+        test=samples[len(samples) // 2:]
+    )
+
+    utils.verify("{}/{}.npz".format(output_dir, dist), "{}/{}.json".format(output_dir, dist))

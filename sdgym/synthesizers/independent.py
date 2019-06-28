@@ -1,11 +1,11 @@
 import numpy as np
 from sklearn.mixture import GaussianMixture
 
-from sdgym.synthesizer.synthesizer_base import SynthesizerBase, run
-from sdgym.utils import CONTINUOUS, ORDINAL, CATEGORICAL
-
+from sdgym.synthesizer.synthesizer_base import SynthesizerBase
+from sdgym.utils import CONTINUOUS
 
 rng = np.random
+
 
 class IndependentSynthesizer(SynthesizerBase):
     """docstring for IdentitySynthesizer."""
@@ -27,7 +27,6 @@ class IndependentSynthesizer(SynthesizerBase):
                 nomial = nomial / np.sum(nomial)
                 self.models.append(nomial)
 
-
     def generate(self, n):
         data = np.zeros([n, len(self.meta)], self.dtype)
 
@@ -44,7 +43,3 @@ class IndependentSynthesizer(SynthesizerBase):
 
     def init(self, meta, working_dir):
         self.meta = meta
-
-
-if __name__ == "__main__":
-    run(IndependentSynthesizer(5))

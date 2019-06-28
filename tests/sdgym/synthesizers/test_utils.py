@@ -12,9 +12,8 @@ class TestTransformer(TestCase):
         """get_metadata returns information about the dataframe."""
         # Setup
         data = pd.DataFrame({
-            'numerical': [0,1,2,3,4,5],
+            'numerical': [0, 1, 2, 3, 4, 5],
             'categorical': list('AAABBC')
-        
         })
         data['categorical'] = data.categorical.astype('category')
 
@@ -23,7 +22,7 @@ class TestTransformer(TestCase):
                 'name': 'numerical',
                 'type': 'continuous',
                 'min': 0,
-                'max':5
+                'max': 5
             },
             {
                 "name": 'categorical',

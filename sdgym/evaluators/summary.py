@@ -1,45 +1,42 @@
-import json
+import argparse
 import glob
-import re
+import json
 import os
+import re
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import argparse
-import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='Evaluate output of one synthesizer.')
-
 parser.add_argument('--result', type=str, default='output/__result__',
                     help='result dir')
 parser.add_argument('--summary', type=str, default='output/__summary__',
                     help='result dir')
 
 
-def method_name_order(name):
-    if 'identity' in name.lower():
-        return 0
-    if 'clbn' in name.lower():
-        return 1
-    if 'privbn' in name.lower():
-        return 2
-    if 'medgan' in name.lower():
-        return 3
-    if 'veegan' in name.lower():
-        return 4
-    if 'tablegan' in name.lower():
-        return 5
-    if 'tvae' in name.lower():
-        return 8
-    if 'tgan' in name.lower():
-        return 9
-    return 6
+METHOD_ORDER = dict(
+    identity=0,
+    clbn=1,
+    privbn=2,
+    medgan=3,
+    veegan=4,
+    tablegan=5,
+    tvae=8,
+    tgan=9
+)
+
+
+def method_name_order(item):
+    return METHOD_ORDER.get(item[0].lower(), 6)
+
 
 def coverage(datasets, results):
     ticks = []
     values = []
 
     results = list(results)
-    results = sorted(results, key=lambda x: method_name_order(x[0]))
+    results = sorted(results, key=method_name_order)
 
     for model, result in results:
         covered = set()
@@ -71,7 +68,7 @@ def save_barchart(barchart, filename):
     barchart.pivot("metric", "synthesizer", "val")[methods].plot(kind='bar')
     plt.title(dataset)
     plt.xlabel(None)
-    plt.legend(title=None, loc=(1.04,0))
+    plt.legend(title=None, loc=(1.04, 0))
     plt.savefig(filename, bbox_inches='tight')
 
 
@@ -88,20 +85,18 @@ def dataset_performance(dataset, results):
             else:
                 synthesizer_name = synthesizer + "_" + str(one_result['step'])
 
-
-            if not synthesizer_name in synthesizer_metric_perform:
-                synthesizer_metric_perform[synthesizer_name] = {}
-            try:
-                synthesizer_metric_perform[synthesizer_name]['_distance'] = [one_result['distance']]
-            except:
-                synthesizer_metric_perform[synthesizer_name]['_distance'] = [0]
+            if synthesizer_name not in synthesizer_metric_perform:
+                distance = [one_result.get('distance', 0)]
+                synthesizer_metric_perform[synthesizer_name] = {
+                    '_distance': distance
+                }
 
             for model_metric_score in one_result['performance']:
                 for metric, v in model_metric_score.items():
                     if metric == "name":
                         continue
                     else:
-                        if not metric in synthesizer_metric_perform[synthesizer_name]:
+                        if metric not in synthesizer_metric_perform[synthesizer_name]:
                             synthesizer_metric_perform[synthesizer_name][metric] = []
 
                         synthesizer_metric_perform[synthesizer_name][metric].append(v)
@@ -130,6 +125,7 @@ def dataset_performance(dataset, results):
 
     return synthesizer_metric_perform
 
+
 def generate_tabular_result(dataset_perform):
     df = pd.DataFrame(data={'alg': []})
 
@@ -139,10 +135,10 @@ def generate_tabular_result(dataset_perform):
                 column_name = "{}/{}".format(dataset, metric)
                 row_name = alg
 
-                if not column_name in df.columns:
+                if column_name not in df.columns:
                     df[column_name] = [None] * len(df)
 
-                if not row_name in set(df['alg'].unique()):
+                if row_name not in set(df['alg'].unique()):
                     row_id = len(df)
                     df.loc[row_id] = [None] * len(df.columns)
                     df['alg'][row_id] = alg

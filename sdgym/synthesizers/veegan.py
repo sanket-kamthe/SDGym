@@ -3,11 +3,11 @@ import os
 import numpy as np
 import torch
 from torch.nn import Dropout, Linear, Module, ReLU, Sequential
+from torch.nn.functional import mse_loss, softmax
 from torch.optim import Adam
-from torch.nn.functional import softmax, mse_loss
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
-from sdgym.synthesizer.base import SynthesizerBase, run
+from sdgym.synthesizer.base import SynthesizerBase
 from sdgym.synthesizer.utils import GeneralTransformer
 
 
@@ -18,11 +18,11 @@ class Reconstructor(Module):
         dim = data_dim
         seq = []
         for item in list(reconstructor_dim):
-            seq += [nn.Linear(dim, item), nn.ReLU() ]
+            seq += [Linear(dim, item), ReLU()]
             dim = item
-        
-        seq += [nn.Linear(dim, embedding_dim)]
-        self.seq = nn.Sequential(*seq)
+
+        seq += [Linear(dim, embedding_dim)]
+        self.seq = Sequential(*seq)
 
     def forward(self, input):
         return self.seq(input)
@@ -35,11 +35,11 @@ class Discriminator(Module):
         dim = input_dim
         seq = []
         for item in list(discriminator_dim):
-            seq += [nn.Linear(dim, item), nn.ReLU(), nn.Dropout(0.5)]
+            seq += [Linear(dim, item), ReLU(), Dropout(0.5)]
             dim = item
 
-        seq += [nn.Linear(dim, 1)]
-        self.seq = nn.Sequential(*seq)
+        seq += [Linear(dim, 1)]
+        self.seq = Sequential(*seq)
 
     def forward(self, input):
         return self.seq(input)
@@ -47,16 +47,16 @@ class Discriminator(Module):
 
 class Generator(Module):
 
-    def __init__(self, embedding_dim, genenerator_dim, data_dim):
+    def __init__(self, embedding_dim, generator_dim, data_dim):
         super(Generator, self).__init__()
         dim = embedding_dim
         seq = []
         for item in list(generator_dim):
-            seq += [nn.Linear(dim, item), nn.ReLU()]
+            seq += [Linear(dim, item), ReLU()]
             dim = item
 
-        seq.append(nn.Linear(dim, data_dim))
-        self.seq = nn.Sequential(*seq)
+        seq.append(Linear(dim, data_dim))
+        self.seq = Sequential(*seq)
 
     def forward(self, input, output_info):
         data = self.seq(input)
@@ -83,18 +83,18 @@ class VEEGANSynthesizer(SynthesizerBase):
     """docstring for VEEGANSynthesizer."""
 
     def __init__(self,
-                 embeddingDim=32,
-                 genDim=(128, 128),
-                 disDim=(128, ),
-                 recDim=(128, 128),
+                 embedding_dim=32,
+                 gen_dim=(128, 128),
+                 dis_dim=(128, ),
+                 rec_dim=(128, 128),
                  l2scale=1e-6,
                  batch_size=500,
                  store_epoch=[300]):
 
-        self.embeddingDim = embeddingDim
-        self.genDim = genDim
-        self.disDim = disDim
-        self.recDim = recDim
+        self.embedding_dim = embedding_dim
+        self.gen_dim = gen_dim
+        self.dis_dim = dis_dim
+        self.rec_dim = rec_dim
 
         self.l2scale = l2scale
         self.batch_size = batch_size
@@ -108,16 +108,17 @@ class VEEGANSynthesizer(SynthesizerBase):
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         data_dim = self.transformer.output_dim
-        generator = Generator(self.embeddingDim, self.genDim, data_dim).to(self.device)
-        discriminator = Discriminator(self.embeddingDim + data_dim, self.disDim).to(self.device)
-        reconstructor = Reconstructor(data_dim, self.recDim, self.embeddingDim).to(self.device)
+        generator = Generator(self.embedding_dim, self.gen_dim, data_dim).to(self.device)
+        discriminator = Discriminator(self.embedding_dim + data_dim, self.dis_dim).to(self.device)
+        reconstructor = Reconstructor(data_dim, self.rec_dim, self.embedding_dim).to(self.device)
 
-        optimizerG = Adam(generator.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
-        optimizerD = Adam(discriminator.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
-        optimizerR = Adam(reconstructor.parameters(), lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
+        optimizer_params = dict(lr=1e-3, betas=(0.5, 0.9), weight_decay=self.l2scale)
+        optimizerG = Adam(generator.parameters(), **optimizer_params)
+        optimizerD = Adam(discriminator.parameters(), **optimizer_params)
+        optimizerR = Adam(reconstructor.parameters(), **optimizer_params)
 
         max_epoch = max(self.store_epoch)
-        mean = torch.zeros(self.batch_size, self.embeddingDim, device=self.device)
+        mean = torch.zeros(self.batch_size, self.embedding_dim, device=self.device)
         std = mean + 1
         for i in range(max_epoch):
             for id_, data in enumerate(loader):
@@ -130,9 +131,14 @@ class VEEGANSynthesizer(SynthesizerBase):
                 fakezrec = reconstructor(fake)
                 y_fake = discriminator(torch.cat([fake, fakez], dim=1))
 
-                loss_d = -(torch.log(torch.sigmoid(y_real) + 1e-4).mean()) - (torch.log(1. - torch.sigmoid(y_fake) + 1e-4).mean())
-                loss_g = -y_fake.mean() + mse_loss(fakezrec, fakez, reduction='mean') / self.embeddingDim
-                loss_r = -y_fake.mean() + mse_loss(fakezrec, fakez, reduction='mean') / self.embeddingDim
+                loss_d = (
+                    -(torch.log(torch.sigmoid(y_real) + 1e-4).mean())
+                    - (torch.log(1. - torch.sigmoid(y_fake) + 1e-4).mean())
+                )
+
+                numerator = -y_fake.mean() + mse_loss(fakezrec, fakez, reduction='mean')
+                loss_g = numerator / self.embedding_dim
+                loss_r = numerator / self.embedding_dim
                 optimizerD.zero_grad()
                 loss_d.backward(retain_graph=True)
                 optimizerD.step()
@@ -142,18 +148,18 @@ class VEEGANSynthesizer(SynthesizerBase):
                 optimizerR.zero_grad()
                 loss_r.backward()
                 optimizerR.step()
-            print(i, loss_d, loss_g, loss_r)
-            if i+1 in self.store_epoch:
+
+            if i + 1 in self.store_epoch:
                 torch.save({
                     "generator": generator.state_dict(),
                     "discriminator": discriminator.state_dict(),
                     "reconstructor": reconstructor.state_dict(),
-                }, "{}/model_{}.tar".format(self.working_dir, i+1))
+                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
     def generate(self, n):
         data_dim = self.transformer.output_dim
         output_info = self.transformer.output_info
-        generator = Generator(self.embeddingDim, self.genDim, data_dim).to(self.device)
+        generator = Generator(self.embedding_dim, self.gen_dim, data_dim).to(self.device)
 
         ret = []
         for epoch in self.store_epoch:
@@ -165,7 +171,7 @@ class VEEGANSynthesizer(SynthesizerBase):
             steps = n // self.batch_size + 1
             data = []
             for i in range(steps):
-                mean = torch.zeros(self.batch_size, self.embeddingDim)
+                mean = torch.zeros(self.batch_size, self.embedding_dim)
                 std = mean + 1
                 noise = torch.normal(mean=mean, std=std).to(self.device)
                 fake = generator(noise, output_info)
@@ -180,14 +186,10 @@ class VEEGANSynthesizer(SynthesizerBase):
         self.meta = meta
         self.working_dir = working_dir
 
-        self.embeddingDim = min(self.embeddingDim, len(self.meta))
+        self.embedding_dim = min(self.embedding_dim, len(self.meta))
         try:
             os.mkdir(working_dir)
         except FileExistsError:
             pass
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-if __name__ == "__main__":
-    run(VEEGANSynthesizer())
