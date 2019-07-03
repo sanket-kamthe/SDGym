@@ -3,21 +3,20 @@ import json
 import numpy as np
 from pomegranate import BayesianNetwork, ConditionalProbabilityTable, DiscreteDistribution
 
-from sdgym.synthesizer.base import BaseSynthesizer
-from sdgym.synthesizer.utils import DiscretizeTransformer
+from sdgym.synthesizers.base import BaseSynthesizer
+from sdgym.synthesizers.utils import GeneralTransformer
 
 
 class CLBNSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
 
-    def __init__(self, meta, working_dir):
-        super().__init__(meta, working_dir)
-        self.meta = meta
+    def __init__(self):
+        super().__init__()
         self.model = None
         self.discretizer = None
 
     def fit(self, data):
-        self.discretizer = DiscretizeTransformer(self.meta, 15)
+        self.discretizer = GeneralTransformer(n_bins=15)
         self.discretizer.fit(data)
         discretized_data = self.discretizer.transform(data)
         self.model = BayesianNetwork.from_samples(discretized_data, algorithm='chow-liu')

@@ -1,9 +1,9 @@
 import numpy as np
 
-from sdgym.synthesizer_base import SynthesizerBase
+from sdgym.synthesizers.base import BaseSynthesizer
 
 
-class IdentitySynthesizer(SynthesizerBase):
+class IdentitySynthesizer(BaseSynthesizer):
     """Trivial synthesizer.
 
     Returns the same exact data that is used to fit it.

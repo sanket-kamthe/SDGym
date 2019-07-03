@@ -10,7 +10,7 @@ from torch.nn.functional import binary_cross_entropy_with_logits
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 
-from sdgym.synthesizers.base import SynthesizerBase
+from sdgym.synthesizers.base import BaseSynthesizer
 from sdgym.synthesizers.utils import CATEGORICAL, TableganTransformer
 
 
@@ -117,7 +117,7 @@ def weights_init(m):
         init.constant_(m.bias.data, 0)
 
 
-class TableganSynthesizer(SynthesizerBase):
+class TableganSynthesizer(BaseSynthesizer):
     """docstring for TableganSynthesizer??"""
 
     def __init__(self,

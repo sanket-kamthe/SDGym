@@ -7,7 +7,7 @@ import torch.utils.data
 from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential
 from torch.nn import functional as F
 
-from sdgym.synthesizers.base import SynthesizerBase
+from sdgym.synthesizers.base import BaseSynthesizer
 from sdgym.synthesizers.utils import BGMTransformer
 
 LAMBDA = 10
@@ -271,7 +271,7 @@ def calc_gradient_penalty(netD, real_data, fake_data, device='cpu', pac=10):
     return gradient_penalty
 
 
-class TGANSynthesizer(SynthesizerBase):
+class TGANSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
     def __init__(self,
                  embedding_dim=128,

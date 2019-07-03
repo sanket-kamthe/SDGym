@@ -2,13 +2,13 @@ import os
 
 import numpy as np
 import torch
-from torch.functional import cross_entropy
+from torch.nn.functional import cross_entropy
 from torch.nn import Linear, Module, Parameter, ReLU, Sequential
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 
-from sdgym.synthesizer_base import SynthesizerBase
-from sdgym.synthesizer_utils import BGMTransformer
+from sdgym.synthesizers.base import BaseSynthesizer
+from sdgym.synthesizers.utils import BGMTransformer
 
 
 class Encoder(Module):
@@ -75,7 +75,7 @@ def loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
     return sum(loss) * factor / x.size()[0], KLD / x.size()[0]
 
 
-class TVAESynthesizer(SynthesizerBase):
+class TVAESynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
     def __init__(self,
                  embedding_dim=128,

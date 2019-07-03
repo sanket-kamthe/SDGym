@@ -8,8 +8,8 @@ from torch.nn.functional import cross_entropy, mse_loss, sigmoid
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 
-from sdgym.synthesizer_base import SynthesizerBase
-from sdgym.synthesizer_utils import GeneralTransformer
+from sdgym.synthesizers.base import BaseSynthesizer
+from sdgym.synthesizers.utils import GeneralTransformer
 
 
 class ResidualFC(Module):
@@ -120,7 +120,7 @@ def aeloss(fake, real, output_info):
     return sum(loss) / fake.size()[0]
 
 
-class MedganSynthesizer(SynthesizerBase):
+class MedganSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
     def __init__(self,
                  embedding_dim=128,
@@ -149,8 +149,11 @@ class MedganSynthesizer(SynthesizerBase):
         self.batch_size = batch_size
         self.store_epoch = store_epoch
 
-    def train(self, train_data):
-        self.transformer = GeneralTransformer(self.meta)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.transformer = None
+
+    def fit(self, train_data):
+        self.transformer = GeneralTransformer()
         self.transformer.fit(train_data)
         train_data = self.transformer.transform(train_data)
         dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(self.device))
@@ -222,7 +225,7 @@ class MedganSynthesizer(SynthesizerBase):
                     "decoder": decoder.state_dict()
                 }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
-    def generate(self, n):
+    def sample(self, n):
         data_dim = self.transformer.output_dim
         generator = Generator(self.random_dim, self.generator_dims, self.bnDecay).to(self.device)
         decoder = Decoder(self.embedding_dim, self.compress_dims, data_dim).to(self.device)
@@ -254,11 +257,3 @@ class MedganSynthesizer(SynthesizerBase):
             data = self.transformer.inverse_transform(data)
             ret.append((epoch, data))
         return ret
-
-    def init(self, meta, working_dir):
-        self.meta = meta
-        self.working_dir = working_dir
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

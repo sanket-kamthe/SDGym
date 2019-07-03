@@ -1,11 +1,11 @@
 import numpy as np
 
-from sdgym.synthesizers.base import SynthesizerBase
+from sdgym.synthesizers.base import BaseSynthesizer
 
 rng = np.random
 
 
-class UniformSynthesizer(SynthesizerBase):
+class UniformSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
 
     def train(self, train_data):

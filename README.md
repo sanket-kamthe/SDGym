@@ -21,6 +21,8 @@ Synthetic Data Gym (SDGym) is a framework to benchmark the performance of synthe
 for non-temporal tabular data. SDGym is based on a [paper ] (??)
 of the same name, and the project is part of the [Data to AI Laboratory](https://dai.lids.mit.edu/) at MIT.
 
+The benchmarking consist of making the synthesizer generate different datasets and evaluate this datasets though a 
+
 # Install
 
 ## Requirements
@@ -98,13 +100,13 @@ make install-develop
 Make sure to use them regularly while developing by running the commands `make lint` and
 `make test`.
 
-# How to benchmark your synthesizer?
+## How to benchmark your synthesizer ?
 
 In order to use **SDGym** you will need a function that has as unique input a table of data output
  one table of the same size of synthesized data. That is, that it has a signature like this:
 
 ```python
-synthesized_data  = synthesizer(real_data)
+synthesized_data  = my_synthesizer_function(real_data)
 ```
 
 If your synthesizer is a class, lets assume it has a Full Qualified Name `package.module.Model`,
@@ -113,7 +115,7 @@ in order to benchmark it with SDGym you can wrap in a function like this:
 ```python
 from package.module import Model
 
-def synthesizer(X):
+def my_synthesizer_function(X):
     num_rows = X.shape[0]
 
     model = Model()
@@ -125,7 +127,7 @@ def synthesizer(X):
 This function should contain all parameters and arguments to instantiate, fit and sample using
 your model.
 
-# What data shall accept your synthesizer?
+## What data shall accept your synthesizer?
 
 As we mentioned in the section before, the main input of **SDGym** is a synthesizer to be
 benchmarked, which is expected to be a function that has as unique input and output a table of

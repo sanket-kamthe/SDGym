@@ -7,8 +7,8 @@ from torch.nn.functional import mse_loss, softmax
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 
-from sdgym.synthesizer.base import SynthesizerBase
-from sdgym.synthesizer.utils import GeneralTransformer
+from sdgym.synthesizers.base import BaseSynthesizer
+from sdgym.synthesizers.utils import GeneralTransformer
 
 
 class Reconstructor(Module):
@@ -79,7 +79,7 @@ class Generator(Module):
         return torch.cat(data_t, dim=1)
 
 
-class VEEGANSynthesizer(SynthesizerBase):
+class VEEGANSynthesizer(BaseSynthesizer):
     """docstring for VEEGANSynthesizer."""
 
     def __init__(self,

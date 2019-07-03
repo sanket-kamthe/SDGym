@@ -4,7 +4,7 @@ import subprocess
 
 import numpy as np
 
-from sdgym.synthesizers.base import SynthesizerBase
+from sdgym.synthesizers.base import BaseSynthesizer
 from sdgym.synthesizers.utils import CATEGORICAL, ORDINAL
 
 
@@ -13,7 +13,7 @@ def try_mkdirs(dir):
         os.makedirs(dir)
 
 
-class PrivBNSynthesizer(SynthesizerBase):
+class PrivBNSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
     def __init__(self):
         assert os.path.exists("privbayes/privBayes.bin")
