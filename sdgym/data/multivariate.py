@@ -44,10 +44,10 @@ class MultivariateMaker(object):
         data = np.empty((n, len(nodes_parents)), dtype='S128')
         for current in processing_order:
             distribution = self.model.states[current].distribution
-            if type(distribution) == DiscreteDistribution:
+            if isinstance(distribution, DiscreteDistribution):
                 data[:, current] = distribution.sample(n)
             else:
-                assert type(distribution) == ConditionalProbabilityTable
+                assert isinstance(distribution, ConditionalProbabilityTable)
                 parents_map = nodes_parents[current]
                 parents = distribution.parents
                 for _id in range(n):

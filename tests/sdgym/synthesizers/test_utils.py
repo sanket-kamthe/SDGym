@@ -1,11 +1,10 @@
 from unittest import TestCase
 from unittest.mock import patch
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from sdgym.synthesizers.utils import (
-    BGMTransformer, DiscretizeTransformer, GeneralTransformer, GMMTransformer, Transformer)
+from sdgym.synthesizers.utils import DiscretizeTransformer, Transformer
 
 
 class TestTransformer(TestCase):

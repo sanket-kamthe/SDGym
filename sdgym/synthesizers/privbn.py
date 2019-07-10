@@ -15,6 +15,7 @@ def try_mkdirs(dir):
 
 class PrivBNSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
+
     def __init__(self):
         assert os.path.exists("privbayes/privBayes.bin")
 

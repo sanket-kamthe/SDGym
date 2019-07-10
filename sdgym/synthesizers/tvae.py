@@ -2,8 +2,8 @@ import os
 
 import numpy as np
 import torch
-from torch.nn.functional import cross_entropy
 from torch.nn import Linear, Module, Parameter, ReLU, Sequential
+from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -77,6 +77,7 @@ def loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
 
 class TVAESynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
+
     def __init__(self,
                  embedding_dim=128,
                  compress_dims=(128, 128),

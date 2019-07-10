@@ -52,6 +52,7 @@ class DiscretizeTransformer(Transformer):
     Transformation result is a int array.
 
     """
+
     def __init__(self, n_bins):
         self.n_bins = n_bins
         self.meta = None
@@ -64,7 +65,7 @@ class DiscretizeTransformer(Transformer):
         data = data.values
         self.column_index = [
             index for index, info in enumerate(self.meta) if info['type'] == CONTINUOUS]
-        import ipdb; ipdb.set_trace()
+
         self.discretizer = KBinsDiscretizer(
             n_bins=self.n_bins, encode='ordinal', strategy='uniform')
 
@@ -103,7 +104,8 @@ class GeneralTransformer(Transformer):
     """Continuous and ordinal columns are normalized to [0, 1].
     Discrete columns are converted to a one-hot vector.
     """
-    def __init__(self,  act='sigmoid'):
+
+    def __init__(self, act='sigmoid'):
         self.act = act
         self.meta = None
         self.output_dim = None

@@ -6,18 +6,20 @@ import os
 
 import numpy as np
 from pomegranate import BayesianNetwork
-from sklearn.ensemble import AdaBoostClassifier as ABC
-from sklearn.linear_model import LinearRegression as LRR
-from sklearn.linear_model import LogisticRegression as LRC
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, r2_score
-from sklearn.mixture import GaussianMixture as GMM
-from sklearn.neural_network import MLPClassifier as MLPC
-from sklearn.neural_network import MLPRegressor as MLPR
-from sklearn.tree import DecisionTreeClassifier as DTC
+from sklearn.mixture import GaussianMixture
+from sklearn.neural_network import MLPClassifier
+from sklearn.neural_network import MLPRegressor
+from sklearn.tree import DecisionTreeClassifier
 
 from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 
+
 logging.basicConfig(level=logging.INFO)
+
 
 BAYESIAN_PARAMETER = {
     'grid': 30,
@@ -26,17 +28,21 @@ BAYESIAN_PARAMETER = {
 }
 
 
-def get_arg_parser():
-    parser = argparse.ArgumentParser(description='Evaluate output of one synthesizer.')
-    parser.add_argument('--result', type=str, default='output/__result__', help='result dir')
-    parser.add_argument(
-        '--force', dest='force', action='store_true', help='overwrite result', default=False)
-    parser.add_argument('synthetic', type=str, help='synthetic data folder')
-
-    return parser
-
-
 def default_multi_classification(x_train, y_train, x_test, y_test, classifiers):
+    """Score classifiers using f1 score and the given train and test data.
+
+    Args:
+        x_train(numpy.ndarray):
+        y_train(numpy.ndarray):
+        x_test(numpy.ndarray):
+        y_test(numpy):
+        classifiers(list):
+
+    Returns:
+        list[dict]:
+
+
+    """
     performance = []
     for clf, name in classifiers:
         unique_labels = np.unique(y_train)
@@ -149,49 +155,72 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
     return features, labels
 
 
-def get_models(dataset):
-    if dataset in ["mnist12", "mnist28"]:
-        classifiers = [
-            (DTC(max_depth=30, class_weight='balanced'), "Decision Tree (max_depth=30)"),
-            (LRC(solver='lbfgs', n_jobs=2, multi_class="auto",
-                 class_weight='balanced', max_iter=50), "Logistic Regression"),
-            (MLPC((100, ), max_iter=50), "MLP (100)")
-        ]
-        return classifiers
-    if dataset in ['adult']:
-        classifiers = [
-            (DTC(max_depth=15, class_weight='balanced'), "Decision Tree (max_depth=20)"),
-            (ABC(), "Adaboost (estimator=50)"),
-            (LRC(solver='lbfgs', n_jobs=2,
-                 class_weight='balanced', max_iter=50), "Logistic Regression"),
-            (MLPC((50, ), max_iter=50), "MLP (50)")
-        ]
-        return classifiers
-    if dataset in ['census', 'credit']:
-        classifiers = [
-            (DTC(max_depth=30, class_weight='balanced'), "Decision Tree (max_depth=30)"),
-            (ABC(), "Adaboost (estimator=50)"),
-            (MLPC((100, ), max_iter=50), "MLP (100)"),
-        ]
-        return classifiers
-    if dataset in ['intrusion', 'covtype']:
-        classifiers = [
-            (DTC(max_depth=30, class_weight='balanced'), "Decision Tree (max_depth=30)"),
-            (MLPC((100, ), max_iter=50), "MLP (100)"),
-        ]
-        return classifiers
-    if dataset in ['news']:
-        regressors = [
-            (LRR(), "Linear Regression"),
-            (MLPR((100, ), max_iter=50), "MLP (100)")
-        ]
-        return regressors
+DATASET_MODELS_MAP = {
+    'mnist12': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (LogisticRegression(
+            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
+            "Logistic Regression"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
+    ],
+    'mnist28': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (LogisticRegression(
+            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
+            "Logistic Regression"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
+    ],
+    'adult': [
+        (DecisionTreeClassifier(max_depth=15, class_weight='balanced'),
+            "Decision Tree (max_depth=20)"),
+        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
+        (LogisticRegression(
+            solver='lbfgs', n_jobs=2, class_weight='balanced', max_iter=50),
+            "Logistic Regression"),
+        (MLPClassifier((50, ), max_iter=50), "MLP (50)")
+    ],
+    'census': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'credit': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'intrusion': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'covtype': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'news': [
+        (LinearRegression(), "Linear Regression"),
+        (MLPRegressor((100, ), max_iter=50), "MLP (100)")
+    ]
+}
 
-    assert 0
+
+def get_models(dataset):
+    models = DATASET_MODELS_MAP.get(dataset)
+    if models:
+        return models
+
+    else:
+        raise ValueError('Could not find models for dataset {}'.format(dataset))
 
 
 def default_gmm_likelihood(trainset, testset, n):
-    gmm = GMM(n, covariance_type='diag')
+    gmm = GaussianMixture(n, covariance_type='diag')
     gmm.fit(testset)
     l1 = gmm.score(trainset)
 
@@ -249,6 +278,25 @@ def default_bayesian_likelihood(dataset, trainset, testset, meta):
     }]
 
 
+DATASET_EVALUATOR_MAP = {
+    "mnist12": default_multi_classification,
+    "mnist28": default_multi_classification,
+    "covtype": default_multi_classification,
+    "intrusion": default_multi_classification,
+    'credit': default_binary_classification,
+    'census': default_binary_classification,
+    'adult': default_binary_classification,
+    'news': news_regression,
+    'grid': default_gmm_likelihood,
+    'gridr': default_gmm_likelihood,
+    'ring': default_gmm_likelihood,
+    'asia': default_bayesian_likelihood,
+    'alarm': default_bayesian_likelihood,
+    'child': default_bayesian_likelihood,
+    'insurance': default_bayesian_likelihood,
+}
+
+
 def evalute_dataset(dataset, trainset, testset, meta):
 
     evaluator = DATASET_EVALUATOR_MAP.get(dataset)
@@ -296,28 +344,17 @@ def compute_distance(trainset, syn, meta, sample=300):
     return np.mean(dis_all)
 
 
-DATASET_EVALUATOR_MAP = {
-    "mnist12": default_multi_classification,
-    "mnist28": default_multi_classification,
-    "covtype": default_multi_classification,
-    "intrusion": default_multi_classification,
-    'credit': default_binary_classification,
-    'census': default_binary_classification,
-    'adult': default_binary_classification,
-    'news': news_regression,
-    'grid': default_gmm_likelihood,
-    'gridr': default_gmm_likelihood,
-    'ring': default_gmm_likelihood,
-    'asia': default_bayesian_likelihood,
-    'alarm': default_bayesian_likelihood,
-    'child': default_bayesian_likelihood,
-    'insurance': default_bayesian_likelihood,
-}
+def get_arg_parser():
+    parser = argparse.ArgumentParser(description='Evaluate output of one synthesizer.')
+    parser.add_argument('--result', type=str, default='output/__result__', help='result dir')
+    parser.add_argument(
+        '--force', dest='force', action='store_true', help='overwrite result', default=False)
+    parser.add_argument('synthetic', type=str, help='synthetic data folder')
+
+    return parser
 
 
-if __name__ == "__main__":
-    parser = get_arg_parser()
-    args = parser.parse_args()
+def main(result, synthetic, force):
 
     if not os.path.exists(args.result):
         os.makedirs(args.result)
@@ -358,11 +395,11 @@ if __name__ == "__main__":
         meta_filename = glob.glob("data/*/{}.json".format(dataset))
 
         if len(data_filename) != 1:
-            logging.warning("Skip. Can't find dataset {}. ".format(dataset))
+            logging.warning("Skip. Can't find dataset {}.".format(dataset))
             continue
 
         if len(meta_filename) != 1:
-            logging.warning("Skip. Can't find meta {}. ".format(dataset))
+            logging.warning("Skip. Can't find meta {}.".format(dataset))
             continue
 
         data = np.load(data_filename[0])['test']
@@ -386,3 +423,9 @@ if __name__ == "__main__":
 
     with open(result_file, "w") as f:
         json.dump(results, f, sort_keys=True, indent=4, separators=(',', ': '))
+
+
+if __name__ == "__main__":
+    parser = get_arg_parser()
+    args = parser.parse_args()
+    main(*args)

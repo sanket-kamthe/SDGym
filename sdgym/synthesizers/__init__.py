@@ -9,7 +9,6 @@ from sdgym.synthesizers.tvae import TVAESynthesizer
 from sdgym.synthesizers.uniform import UniformSynthesizer
 from sdgym.synthesizers.veegan import VEEGANSynthesizer
 
-
 __all__ = (
     'CLBNSynthesizer',
     'IdentitySynthesizer',

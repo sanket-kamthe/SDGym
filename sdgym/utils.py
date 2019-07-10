@@ -25,7 +25,7 @@ def verify(datafile, metafile):
 
     for item in meta:
         assert 'name' in item
-        assert item['name'] is None or type(item['name']) == str
+        assert item['name'] is None or isinstance(item['name'], str)
 
         assert 'type' in item
         assert item['type'] in [CATEGORICAL, CONTINUOUS, ORDINAL]
@@ -36,7 +36,7 @@ def verify(datafile, metafile):
             assert 'size' in item and 'i2s' in item
             assert item['size'] == len(item['i2s'])
             for ss in item['i2s']:
-                assert type(ss) == str
+                assert isinstance(ss, str)
                 assert len(set(item['i2s'])) == item['size']
 
     data = np.load(datafile)

@@ -6,21 +6,6 @@ import subprocess
 
 logging.basicConfig(level=logging.INFO)
 
-parser = argparse.ArgumentParser(description='A launcher for easily launch experiments.')
-
-parser.add_argument('--force', dest='force',
-                    action='store_true', help='overwrite results.')
-parser.set_defaults(force=False)
-
-parser.add_argument('--datasets', type=str, nargs='*', default=[],
-                    help='a list of datasets, empty means all datasets.')
-
-parser.add_argument('--repeat', type=int, default=3,
-                    help='a list of datasets, empty means all datasets.')
-
-parser.add_argument('synthesizer', type=str,
-                    help='select a data synthesizer, e.g. identity')
-
 
 def case_insensitive(x):
     t = ""
@@ -29,7 +14,24 @@ def case_insensitive(x):
     return t
 
 
+def get_argparser():
+    parser = argparse.ArgumentParser(description='A launcher for easily launch experiments.')
+    parser.add_argument(
+        '--force', dest='force', action='store_true', help='overwrite results.')
+    parser.set_defaults(force=False)
+    parser.add_argument(
+        '--datasets', type=str, nargs='*', default=[],
+        help='a list of datasets, empty means all datasets.')
+    parser.add_argument(
+        '--repeat', type=int, default=3, help='a list of datasets, empty means all datasets.')
+    parser.add_argument(
+        'synthesizer', type=str, help='select a data synthesizer, e.g. identity')
+
+    return parser
+
+
 if __name__ == "__main__":
+    parser = get_argparser()
     args = parser.parse_args()
 
     if args.force:

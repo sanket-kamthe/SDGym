@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import torch
 from torch import nn
@@ -122,6 +120,7 @@ def aeloss(fake, real, output_info):
 
 class MedganSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
+
     def __init__(self,
                  embedding_dim=128,
                  random_dim=128,
