@@ -80,16 +80,21 @@ class Generator(Module):
 
 
 class VEEGANSynthesizer(BaseSynthesizer):
-    """docstring for VEEGANSynthesizer."""
+    """VEEGANSynthesizer."""
 
-    def __init__(self,
-                 embedding_dim=32,
-                 gen_dim=(128, 128),
-                 dis_dim=(128, ),
-                 rec_dim=(128, 128),
-                 l2scale=1e-6,
-                 batch_size=500,
-                 store_epoch=[300]):
+    def __init__(
+        self,
+        categoricals,
+        ordinals,
+        working_dir='veegan',
+        embedding_dim=32,
+        gen_dim=(128, 128),
+        dis_dim=(128, ),
+        rec_dim=(128, 128),
+        l2scale=1e-6,
+        batch_size=500,
+        store_epoch=[300]
+    ):
 
         self.embedding_dim = embedding_dim
         self.gen_dim = gen_dim
@@ -100,9 +105,16 @@ class VEEGANSynthesizer(BaseSynthesizer):
         self.batch_size = batch_size
         self.store_epoch = store_epoch
 
-    def train(self, train_data):
-        self.transformer = GeneralTransformer(self.meta, act='tanh')
-        self.transformer.fit(train_data)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if not os.path.isdir(working_dir):
+            os.mkdir(working_dir)
+
+        self.working_dir = working_dir
+        super().__init__(categoricals, ordinals)
+
+    def fit(self, train_data):
+        self.transformer = GeneralTransformer(act='tanh')
+        self.transformer.fit(train_data, self.categoricals, self.ordinals)
         train_data = self.transformer.transform(train_data)
         dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(self.device))
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
@@ -156,7 +168,7 @@ class VEEGANSynthesizer(BaseSynthesizer):
                     "reconstructor": reconstructor.state_dict(),
                 }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
-    def generate(self, n):
+    def sample(self, n):
         data_dim = self.transformer.output_dim
         output_info = self.transformer.output_info
         generator = Generator(self.embedding_dim, self.gen_dim, data_dim).to(self.device)
@@ -179,17 +191,5 @@ class VEEGANSynthesizer(BaseSynthesizer):
             data = np.concatenate(data, axis=0)
             data = data[:n]
             data = self.transformer.inverse_transform(data)
-            ret.append((epoch, data))
+            ret.append(data)
         return ret
-
-    def init(self, meta, working_dir):
-        self.meta = meta
-        self.working_dir = working_dir
-
-        self.embedding_dim = min(self.embedding_dim, len(self.meta))
-        try:
-            os.mkdir(working_dir)
-        except FileExistsError:
-            pass
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

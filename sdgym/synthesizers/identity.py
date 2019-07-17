@@ -15,4 +15,4 @@ class IdentitySynthesizer(BaseSynthesizer):
     def sample(self, num_samples):
         assert self.data.shape[0] >= num_samples
         np.random.shuffle(self.data)
-        return [(0, self.data[:num_samples])]
+        return self.data[:num_samples]

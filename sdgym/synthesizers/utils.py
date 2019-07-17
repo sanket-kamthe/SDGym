@@ -9,29 +9,42 @@ from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 class Transformer:
 
     @staticmethod
-    def get_metadata(data):
+    def get_metadata(data, categoricals, ordinals):
         meta = []
 
-        for name, dt in data.dtypes.to_dict().items():
-            if isinstance(dt, pd.CategoricalDtype):
-                mapper = data[name].value_counts().index.tolist()
+        df = pd.DataFrame(data)
+        for index in df:
+            column = data[index]
+
+            if index in categoricals:
+                mapper = column.value_counts().index.tolist()
                 meta.append({
-                    "name": name,
+                    "name": index,
                     "type": CATEGORICAL,
+                    "size": len(mapper),
+                    "i2s": mapper
+                })
+            elif index in ordinals:
+                value_count = list(dict(column.value_counts()).items())
+                value_count = sorted(value_count, key=lambda x: -x[1])
+                mapper = list(map(lambda x: x[0], value_count))
+                meta.append({
+                    "name": index,
+                    "type": ORDINAL,
                     "size": len(mapper),
                     "i2s": mapper
                 })
             else:
                 meta.append({
-                    "name": name,
+                    "name": index,
                     "type": CONTINUOUS,
-                    "min": data[name].min(),
-                    "max": data[name].max(),
+                    "min": column.min(),
+                    "max": column.max(),
                 })
 
         return meta
 
-    def fit(self, data):
+    def fit(self, data, categoricals, ordinals):
         raise NotImplementedError
 
     def transform(self, data):
@@ -59,10 +72,8 @@ class DiscretizeTransformer(Transformer):
         self.column_index = None
         self.discretizer = None
 
-    def fit(self, data):
-        self.meta = self.get_metadata(data)
-        self.columns = list(data.columns)
-        data = data.values
+    def fit(self, data, categoricals, ordinals):
+        self.meta = self.get_metadata(data, categoricals, ordinals)
         self.column_index = [
             index for index, info in enumerate(self.meta) if info['type'] == CONTINUOUS]
 
@@ -87,7 +98,6 @@ class DiscretizeTransformer(Transformer):
         if self.column_index == []:
             return data.astype('int')
 
-        data = data.values
         data[:, self.column_index] = self.discretizer.transform(data[:, self.column_index])
         return data.astype('int')
 
@@ -97,7 +107,7 @@ class DiscretizeTransformer(Transformer):
 
         data = data.astype('float32')
         data[:, self.column_index] = self.discretizer.inverse_transform(data[:, self.column_index])
-        return pd.DataFrame(data, columns=self.columns)
+        return data
 
 
 class GeneralTransformer(Transformer):
@@ -110,9 +120,8 @@ class GeneralTransformer(Transformer):
         self.meta = None
         self.output_dim = None
 
-    def fit(self, data):
-        self.meta = self.get_metadata(data)
-        self.columns = data.columns
+    def fit(self, data, categoricals, ordinals):
+        self.meta = self.get_metadata(data, categoricals, ordinals)
         self.output_dim = 0
         for info in self.meta:
             if info['type'] in [CONTINUOUS, ORDINAL]:
@@ -121,7 +130,6 @@ class GeneralTransformer(Transformer):
                 self.output_dim += info['size']
 
     def transform(self, data):
-        data = data.values
         data_t = []
         self.output_info = []
         for id_, info in enumerate(self.meta):
@@ -189,11 +197,12 @@ class GMMTransformer(Transformer):
     Discrete and ordinal columns are converted to a one-hot vector.
     """
 
-    def __init__(self, meta, n_clusters=5):
-        self.meta = meta
+    def __init__(self, n_clusters=5):
+        self.meta = None
         self.n_clusters = n_clusters
 
-    def fit(self, data):
+    def fit(self, data, categoricals, ordinals):
+        self.meta = self.get_metadata(data, categoricals, ordinals)
         model = []
 
         self.output_info = []
@@ -274,13 +283,14 @@ class BGMTransformer(Transformer):
     Discrete and ordinal columns are converted to a one-hot vector.
     """
 
-    def __init__(self, meta, n_clusters=10, eps=0.005):
+    def __init__(self, n_clusters=10, eps=0.005):
         """n_cluster is the upper bound of modes."""
-        self.meta = meta
+        self.meta = None
         self.n_clusters = n_clusters
         self.eps = eps
 
-    def fit(self, data):
+    def fit(self, data, categoricals, ordinals):
+        self.meta = self.get_metadata(data, categoricals, ordinals)
         model = []
 
         self.output_info = []
@@ -381,22 +391,20 @@ class BGMTransformer(Transformer):
 
 class TableganTransformer(Transformer):
 
-    def __init__(self, meta, side):
-        self.meta = meta
-        self.minn = np.zeros(len(meta))
-        self.maxx = np.zeros(len(meta))
-        for i in range(len(meta)):
-            if meta[i]['type'] == CONTINUOUS:
-                self.minn[i] = meta[i]['min'] - 1e-3
-                self.maxx[i] = meta[i]['max'] + 1e-3
-            else:
-                self.minn[i] = -1e-3
-                self.maxx[i] = meta[i]['size'] - 1 + 1e-3
-
+    def __init__(self, side):
         self.height = side
 
-    def fit(self, data):
-        pass
+    def fit(self, data, categoricals, ordinals):
+        self.meta = self.get_metadata(data, categoricals, ordinals)
+        self.minn = np.zeros(len(self.meta))
+        self.maxx = np.zeros(len(self.meta))
+        for i in range(len(self.meta)):
+            if self.meta[i]['type'] == CONTINUOUS:
+                self.minn[i] = self.meta[i]['min'] - 1e-3
+                self.maxx[i] = self.meta[i]['max'] + 1e-3
+            else:
+                self.minn[i] = -1e-3
+                self.maxx[i] = self.meta[i]['size'] - 1 + 1e-3
 
     def transform(self, data):
         data = data.copy().astype('float32')

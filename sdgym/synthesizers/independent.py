@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.mixture import GaussianMixture
 
 from sdgym.synthesizers.base import BaseSynthesizer
+from sdgym.synthesizers.utils import Transformer
 from sdgym.utils import CONTINUOUS
 
 rng = np.random
@@ -10,20 +11,22 @@ rng = np.random
 class IndependentSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
 
-    def __init__(self, gmm_n):
+    def __init__(self, categoricals, ordinals, gmm_n=5):
         self.gmm_n = gmm_n
+        super().__init__(categoricals, ordinals)
 
-    def fit(self, train_data):
-        self.dtype = train_data.dtype
+    def fit(self, data):
+        self.dtype = data.dtype
+        self.meta = Transformer.get_metadata(data, self.categoricals, self.ordinals)
 
         self.models = []
         for id_, info in enumerate(self.meta):
             if info['type'] == CONTINUOUS:
                 model = GaussianMixture(self.gmm_n)
-                model.fit(train_data[:, [id_]])
+                model.fit(data[:, [id_]])
                 self.models.append(model)
             else:
-                nomial = np.bincount(train_data[:, id_].astype('int'), minlength=info['size'])
+                nomial = np.bincount(data[:, id_].astype('int'), minlength=info['size'])
                 nomial = nomial / np.sum(nomial)
                 self.models.append(nomial)
 
@@ -39,7 +42,4 @@ class IndependentSynthesizer(BaseSynthesizer):
             else:
                 data[:, i] = np.random.choice(np.arange(info['size']), n, p=self.models[i])
 
-        return [(0, data)]
-
-    def init(self, meta, working_dir):
-        self.meta = meta
+        return data

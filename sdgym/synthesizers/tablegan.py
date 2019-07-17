@@ -61,10 +61,10 @@ class Classifier(Module):
         return self.seq(input).view(-1), label
 
 
-def determine_layers(side, random_dim, numChannels):
+def determine_layers(side, random_dim, num_channels):
     assert side >= 4 and side <= 32
 
-    layer_dims = [(1, side), (numChannels, side // 2)]
+    layer_dims = [(1, side), (num_channels, side // 2)]
 
     while layer_dims[-1][1] > 3 and len(layer_dims) < 4:
         layer_dims.append((layer_dims[-1][0] * 2, layer_dims[-1][1] // 2))
@@ -121,32 +121,51 @@ class TableganSynthesizer(BaseSynthesizer):
     """docstring for TableganSynthesizer??"""
 
     def __init__(self,
+                 categoricals,
+                 ordinals,
+                 working_dir='tablegan',
                  random_dim=100,
-                 numChannels=64,
+                 num_channels=64,
                  l2scale=1e-5,
                  batch_size=500,
                  store_epoch=[300]):
 
         self.random_dim = random_dim
-        self.numChannels = numChannels
+        self.num_channels = num_channels
         self.l2scale = l2scale
 
         self.batch_size = batch_size
         self.store_epoch = store_epoch
 
-    def train(self, train_data):
-        self.transformer = TableganTransformer(self.meta, self.side)
-        train_data = self.transformer.transform(train_data)
-        train_data = torch.from_numpy(train_data.astype('float32')).to(self.device)
-        dataset = TensorDataset(train_data)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if not os.path.isdir(working_dir):
+            os.mkdir(working_dir)
+
+        self.working_dir = working_dir
+
+        super().__init__(categoricals, ordinals)
+
+    def fit(self, data):
+        sides = [4, 8, 16, 24, 32]
+        for i in sides:
+            if i * i >= data.shape[1]:
+                self.side = i
+                break
+
+        self.transformer = TableganTransformer(self.side)
+        self.transformer.fit(data, self.categoricals, self.ordinals)
+        data = self.transformer.transform(data)
+        data = torch.from_numpy(data.astype('float32')).to(self.device)
+        dataset = TensorDataset(data)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         layers_D, layers_G, layers_C = determine_layers(
-            self.side, self.random_dim, self.numChannels)
+            self.side, self.random_dim, self.num_channels)
 
-        generator = Generator(self.meta, self.side, layers_G).to(self.device)
-        discriminator = Discriminator(self.meta, self.side, layers_D).to(self.device)
-        classifier = Classifier(self.meta, self.side, layers_C, self.device).to(self.device)
+        generator = Generator(self.transformer.meta, self.side, layers_G).to(self.device)
+        discriminator = Discriminator(self.transformer.meta, self.side, layers_D).to(self.device)
+        classifier = Classifier(
+            self.transformer.meta, self.side, layers_C, self.device).to(self.device)
 
         optimizer_params = dict(lr=2e-4, betas=(0.5, 0.9), eps=1e-3, weight_decay=self.l2scale)
         optimizerG = Adam(generator.parameters(), **optimizer_params)
@@ -213,9 +232,9 @@ class TableganSynthesizer(BaseSynthesizer):
                     "discriminator": discriminator.state_dict(),
                 }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
-    def generate(self, n):
-        _, self.layers_G, _ = determine_layers(self.side, self.random_dim, self.numChannels)
-        generator = Generator(self.meta, self.side, self.layers_G).to(self.device)
+    def sample(self, n):
+        _, self.layers_G, _ = determine_layers(self.side, self.random_dim, self.num_channels)
+        generator = Generator(self.transformer.meta, self.side, self.layers_G).to(self.device)
 
         ret = []
         for epoch in self.store_epoch:
@@ -234,24 +253,6 @@ class TableganSynthesizer(BaseSynthesizer):
 
             data = np.concatenate(data, axis=0)
             data = self.transformer.inverse_transform(data[:n])
-            ret.append((epoch, data))
+            ret.append(data)
 
         return ret
-
-    def init(self, meta, working_dir):
-        self.meta = meta
-        self.working_dir = working_dir
-
-        try:
-            os.mkdir(working_dir)
-        except Exception:
-            pass
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        sides = [4, 8, 16, 24, 32]
-        for i in sides:
-            if i * i >= len(self.meta):
-                self.side = i
-                break
-        # figure out image size

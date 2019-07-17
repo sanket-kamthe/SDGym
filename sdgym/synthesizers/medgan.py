@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 from torch import nn
@@ -11,11 +13,11 @@ from sdgym.synthesizers.utils import GeneralTransformer
 
 
 class ResidualFC(Module):
-    def __init__(self, input_dim, output_dim, activate, bnDecay):
+    def __init__(self, input_dim, output_dim, activate, bn_decay):
         super(ResidualFC, self).__init__()
         self.seq = Sequential(
             Linear(input_dim, output_dim),
-            BatchNorm1d(output_dim, momentum=bnDecay),
+            BatchNorm1d(output_dim, momentum=bn_decay),
             activate()
         )
 
@@ -25,18 +27,18 @@ class ResidualFC(Module):
 
 
 class Generator(Module):
-    def __init__(self, random_dim, hidden_dim, bnDecay):
+    def __init__(self, random_dim, hidden_dim, bn_decay):
         super(Generator, self).__init__()
 
         dim = random_dim
         seq = []
         for item in list(hidden_dim)[:-1]:
             assert item == dim
-            seq += [ResidualFC(dim, dim, nn.ReLU, bnDecay)]
+            seq += [ResidualFC(dim, dim, nn.ReLU, bn_decay)]
         assert hidden_dim[-1] == dim
         seq += [
             Linear(dim, dim),
-            BatchNorm1d(dim, momentum=bnDecay),
+            BatchNorm1d(dim, momentum=bn_decay),
             nn.ReLU()
         ]
         self.seq = Sequential(*seq)
@@ -122,17 +124,20 @@ class MedganSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
 
     def __init__(self,
+                 categoricals,
+                 ordinals,
+                 working_dir='medgan',
                  embedding_dim=128,
                  random_dim=128,
                  generator_dims=(128, 128),          # 128 -> 128 -> 128
                  discriminator_dims=(256, 128, 1),   # datadim * 2 -> 256 -> 128 -> 1
                  compress_dims=(),                   # datadim -> embedding_dim
                  decompress_dims=(),                 # embedding_dim -> datadim
-                 bnDecay=0.99,
+                 bn_decay=0.99,
                  l2scale=0.001,
                  pretrain_epoch=200,
                  batch_size=1000,
-                 store_epoch=[200]):
+                 store_epoch=[2000]):
 
         self.embedding_dim = embedding_dim
         self.random_dim = random_dim
@@ -141,7 +146,7 @@ class MedganSynthesizer(BaseSynthesizer):
 
         self.compress_dims = compress_dims
         self.decompress_dims = decompress_dims
-        self.bnDecay = bnDecay
+        self.bn_decay = bn_decay
         self.l2scale = l2scale
 
         self.pretrain_epoch = pretrain_epoch
@@ -151,11 +156,17 @@ class MedganSynthesizer(BaseSynthesizer):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.transformer = None
 
-    def fit(self, train_data):
+        if not os.path.isdir(working_dir):
+            os.mkdir(working_dir)
+
+        self.working_dir = working_dir
+        super().__init__(categoricals, ordinals)
+
+    def fit(self, data):
         self.transformer = GeneralTransformer()
-        self.transformer.fit(train_data)
-        train_data = self.transformer.transform(train_data)
-        dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(self.device))
+        self.transformer.fit(data, self.categoricals, self.ordinals)
+        data = self.transformer.transform(data)
+        dataset = TensorDataset(torch.from_numpy(data.astype('float32')).to(self.device))
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         data_dim = self.transformer.output_dim
@@ -176,7 +187,7 @@ class MedganSynthesizer(BaseSynthesizer):
                 loss.backward()
                 optimizerAE.step()
 
-        generator = Generator(self.random_dim, self.generator_dims, self.bnDecay).to(self.device)
+        generator = Generator(self.random_dim, self.generator_dims, self.bn_decay).to(self.device)
         discriminator = Discriminator(data_dim, self.discriminator_dims).to(self.device)
         optimizerG = Adam(
             list(generator.parameters()) + list(decoder.parameters()),
@@ -226,33 +237,30 @@ class MedganSynthesizer(BaseSynthesizer):
 
     def sample(self, n):
         data_dim = self.transformer.output_dim
-        generator = Generator(self.random_dim, self.generator_dims, self.bnDecay).to(self.device)
+        generator = Generator(self.random_dim, self.generator_dims, self.bn_decay).to(self.device)
         decoder = Decoder(self.embedding_dim, self.compress_dims, data_dim).to(self.device)
 
-        ret = []
-        for epoch in self.store_epoch:
-            checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
-            generator.load_state_dict(checkpoint['generator'])
-            decoder.load_state_dict(checkpoint['decoder'])
+        epoch = max(self.store_epoch)
+        checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
+        generator.load_state_dict(checkpoint['generator'])
+        decoder.load_state_dict(checkpoint['decoder'])
 
-            generator.eval()
-            decoder.eval()
+        generator.eval()
+        decoder.eval()
 
-            generator.to(self.device)
-            decoder.to(self.device)
+        generator.to(self.device)
+        decoder.to(self.device)
 
-            steps = n // self.batch_size + 1
-            data = []
-            for i in range(steps):
-                mean = torch.zeros(self.batch_size, self.random_dim)
-                std = mean + 1
-                noise = torch.normal(mean=mean, std=std).to(self.device)
-                emb = generator(noise)
-                fake = decoder(emb, self.transformer.output_info)
-                fake = torch.sigmoid(fake)
-                data.append(fake.detach().cpu().numpy())
-            data = np.concatenate(data, axis=0)
-            data = data[:n]
-            data = self.transformer.inverse_transform(data)
-            ret.append((epoch, data))
-        return ret
+        steps = n // self.batch_size + 1
+        data = []
+        for i in range(steps):
+            mean = torch.zeros(self.batch_size, self.random_dim)
+            std = mean + 1
+            noise = torch.normal(mean=mean, std=std).to(self.device)
+            emb = generator(noise)
+            fake = decoder(emb, self.transformer.output_info)
+            fake = torch.sigmoid(fake)
+            data.append(fake.detach().cpu().numpy())
+        data = np.concatenate(data, axis=0)
+        data = data[:n]
+        return self.transformer.inverse_transform(data)

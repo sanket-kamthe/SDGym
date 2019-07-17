@@ -10,8 +10,6 @@ from torch.nn import functional as F
 from sdgym.synthesizers.base import BaseSynthesizer
 from sdgym.synthesizers.utils import BGMTransformer
 
-LAMBDA = 10
-
 
 class Discriminator(Module):
     def __init__(self, input_dim, dis_dims, pack=10):
@@ -73,8 +71,7 @@ def apply_activate(data, output_info):
     for item in output_info:
         if item[1] == 'tanh':
             ed = st + item[0]
-            data_t.append(F.tanh(data[:, st:ed]))
-            # data_t.append(data[:, st:ed])
+            data_t.append(torch.tanh(data[:, st:ed]))
             st = ed
         elif item[1] == 'softmax':
             ed = st + item[0]
@@ -149,7 +146,7 @@ class Cond(object):
                 assert 0
         self.interval = np.asarray(self.interval)
 
-    def generate(self, batch):
+    def sample(self, batch):
         if self.n_col == 0:
             return None
         batch = batch
@@ -164,7 +161,7 @@ class Cond(object):
 
         return vec1, mask1, idx, opt1prime
 
-    def generate_zero(self, batch):
+    def sample_zero(self, batch):
         if self.n_col == 0:
             return None
         vec = np.zeros((batch, self.n_opt), dtype='float32')
@@ -250,7 +247,7 @@ class Sampler(object):
         return self.data[idx]
 
 
-def calc_gradient_penalty(netD, real_data, fake_data, device='cpu', pac=10):
+def calc_gradient_penalty(netD, real_data, fake_data, device='cpu', pac=10, lambda_=10):
     alpha = torch.rand(real_data.size(0) // pac, 1, 1, device=device)
     alpha = alpha.repeat(1, pac, real_data.size(1))
     alpha = alpha.view(-1, real_data.size(1))
@@ -267,7 +264,7 @@ def calc_gradient_penalty(netD, real_data, fake_data, device='cpu', pac=10):
         create_graph=True, retain_graph=True, only_inputs=True)[0]
 
     gradient_penalty = (
-        (gradients.view(-1, pac * real_data.size(1)).norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
+        (gradients.view(-1, pac * real_data.size(1)).norm(2, dim=1) - 1) ** 2).mean() * lambda_
     return gradient_penalty
 
 
@@ -275,6 +272,9 @@ class TGANSynthesizer(BaseSynthesizer):
     """docstring for IdentitySynthesizer."""
 
     def __init__(self,
+                 categoricals,
+                 ordinals,
+                 working_dir='tgan',
                  embedding_dim=128,
                  gen_dim=(256, 256),
                  dis_dim=(256, 256),
@@ -289,11 +289,17 @@ class TGANSynthesizer(BaseSynthesizer):
         self.l2scale = l2scale
         self.batch_size = batch_size
         self.store_epoch = store_epoch
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if not os.path.isdir(working_dir):
+            os.mkdir(working_dir)
 
-    def train(self, train_data):
-        # train_data = monkey_with_train_data(train_data)
-        self.transformer = BGMTransformer(self.meta)
-        self.transformer.fit(train_data)
+        self.working_dir = working_dir
+        super().__init__(categoricals, ordinals)
+
+    def fit(self, train_data):
+
+        self.transformer = BGMTransformer()
+        self.transformer.fit(train_data, self.categoricals, self.ordinals)
         train_data = self.transformer.transform(train_data)
 
         data_sampler = Sampler(train_data, self.transformer.output_info)
@@ -324,7 +330,7 @@ class TGANSynthesizer(BaseSynthesizer):
             for id_ in range(steps_per_epoch):
                 fakez = torch.normal(mean=mean, std=std)
 
-                condvec = self.cond_generator.generate(self.batch_size)
+                condvec = self.cond_generator.sample(self.batch_size)
                 if condvec is None:
                     c1, m1, col, opt = None, None, None, None
                     real = data_sampler.sample(self.batch_size, col, opt)
@@ -363,7 +369,7 @@ class TGANSynthesizer(BaseSynthesizer):
                 optimizerD.step()
 
                 fakez = torch.normal(mean=mean, std=std)
-                condvec = self.cond_generator.generate(self.batch_size)
+                condvec = self.cond_generator.sample(self.batch_size)
 
                 if condvec is None:
                     c1, m1, col, opt = None, None, None, None
@@ -398,7 +404,7 @@ class TGANSynthesizer(BaseSynthesizer):
                     "discriminator": discriminator.state_dict(),
                 }, "{}/model_{}.tar".format(self.working_dir, i + 1))
 
-    def generate(self, n):
+    def sample(self, n):
         data_dim = self.transformer.output_dim
         output_info = self.transformer.output_info
         generator = Generator(
@@ -420,7 +426,7 @@ class TGANSynthesizer(BaseSynthesizer):
                 std = mean + 1
                 fakez = torch.normal(mean=mean, std=std).to(self.device)
 
-                condvec = self.cond_generator.generate_zero(self.batch_size)
+                condvec = self.cond_generator.sample_zero(self.batch_size)
                 if condvec is None:
                     pass
                 else:
@@ -436,12 +442,3 @@ class TGANSynthesizer(BaseSynthesizer):
             data = self.transformer.inverse_transform(data, None)
             ret.append((epoch, data))
         return ret
-
-    def init(self, meta, working_dir):
-        self.meta = meta
-        self.working_dir = working_dir
-
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

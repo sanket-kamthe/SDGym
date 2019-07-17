@@ -76,15 +76,20 @@ def loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
 
 
 class TVAESynthesizer(BaseSynthesizer):
-    """docstring for IdentitySynthesizer."""
+    """TVAESynthesizer."""
 
-    def __init__(self,
-                 embedding_dim=128,
-                 compress_dims=(128, 128),
-                 decompress_dims=(128, 128),
-                 l2scale=1e-5,
-                 batch_size=500,
-                 store_epoch=[300]):
+    def __init__(
+        self,
+        categoricals,
+        ordinals,
+        working_dir='tvae',
+        embedding_dim=128,
+        compress_dims=(128, 128),
+        decompress_dims=(128, 128),
+        l2scale=1e-5,
+        batch_size=500,
+        store_epoch=[300]
+    ):
 
         self.embedding_dim = embedding_dim
         self.compress_dims = compress_dims
@@ -95,9 +100,16 @@ class TVAESynthesizer(BaseSynthesizer):
         self.store_epoch = store_epoch
         self.loss_factor = 2
 
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if not os.path.isdir(working_dir):
+            os.mkdir(working_dir)
+
+        self.working_dir = working_dir
+        super().__init__(categoricals, ordinals)
+
     def fit(self, train_data):
-        self.transformer = BGMTransformer(self.meta)
-        self.transformer.fit(train_data)
+        self.transformer = BGMTransformer()
+        self.transformer.fit(train_data, self.categoricals, self.ordinals)
         train_data = self.transformer.transform(train_data)
         dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(self.device))
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
@@ -124,7 +136,7 @@ class TVAESynthesizer(BaseSynthesizer):
                 loss.backward()
                 optimizerAE.step()
                 decoder.sigma.data.clamp_(0.01, 1.0)
-            print(i + 1, loss_1, loss_2)
+
             if i + 1 in self.store_epoch:
                 torch.save({
                     "encoder": encoder.state_dict(),
@@ -154,14 +166,5 @@ class TVAESynthesizer(BaseSynthesizer):
             data = np.concatenate(data, axis=0)
             data = data[:n]
             data = self.transformer.inverse_transform(data, sigmas.detach().cpu().numpy())
-            ret.append((epoch, data))
+            ret.append(data)
         return ret
-
-    def init(self, meta, working_dir):
-        self.meta = meta
-        self.working_dir = working_dir
-
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

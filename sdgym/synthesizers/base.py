@@ -1,43 +1,22 @@
+
 class BaseSynthesizer:
     """Base class for all default synthesizers of ``SDGym``."""
 
-    def __call__(self, data):
-        """Call an instance like a function.
+    def fit(self, train_data):
+        pass
 
-        This magic method is what allows the duality class-function, as the objects are defined as
-        classes, but executed as function.
+    def sample(self, n):
+        # TODO: Append data only
+        pass
 
-        Args:
-            data(pandas.DataFrame): Table of data to synthesize.
+    def __init__(self, categoricals, ordinals, *args, **kwargs):
+        self.categoricals = categoricals
+        self.ordinals = ordinals
+        # TODO: Remove working_dir
+        # TODO: Use categoricals and ordinals
 
-        Returns:
-            pandas.DataFrame:
-                Synthesized data. It will contain the same number of rows, columns and index
-
-        """
-        self.fit(data)
-        return self.sample(data.shape[0])
-
-    def fit(self, data):
-        """Model and prepare instance to generate samples.
-
-        Args:
-            data(pandas.DataFrame): Data to model.
-
-        Returns:
-            None
-
-        """
-        raise NotImplementedError
-
-    def sample(self, num_samples):
-        """Generate new samples.
-
-        Args:
-            num_samples(int): Number of samples to generate.
-
-        Returns:
-            pandas.DataFrame: Synthesized data.
-
-        """
-        raise NotImplementedError
+    @classmethod
+    def run(cls, data, categoricals, ordinals):
+        synthesizer = cls(categoricals, ordinals)
+        synthesizer.fit(data)
+        return synthesizer.sample(data.shape[0])

@@ -1,10 +1,8 @@
-import argparse
 import glob
-import json
 import logging
-import os
 
 import numpy as np
+import pandas as pd
 from pomegranate import BayesianNetwork
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.linear_model import LinearRegression, LogisticRegression
@@ -23,6 +21,69 @@ BAYESIAN_PARAMETER = {
     'gridr': 30,
     'ring': 10,
 }
+
+DATASET_MODELS_MAP = {
+    'mnist12': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (LogisticRegression(
+            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
+            "Logistic Regression"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
+    ],
+    'mnist28': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (LogisticRegression(
+            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
+            "Logistic Regression"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
+    ],
+    'adult': [
+        (DecisionTreeClassifier(max_depth=15, class_weight='balanced'),
+            "Decision Tree (max_depth=20)"),
+        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
+        (LogisticRegression(
+            solver='lbfgs', n_jobs=2, class_weight='balanced', max_iter=50),
+            "Logistic Regression"),
+        (MLPClassifier((50, ), max_iter=50), "MLP (50)")
+    ],
+    'census': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'credit': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'intrusion': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'covtype': [
+        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
+            "Decision Tree (max_depth=30)"),
+        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
+    ],
+    'news': [
+        (LinearRegression(), "Linear Regression"),
+        (MLPRegressor((100, ), max_iter=50), "MLP (100)")
+    ]
+}
+
+
+def get_models(dataset):
+    models = DATASET_MODELS_MAP.get(dataset)
+    if models:
+        return models
+
+    else:
+        raise ValueError('Could not find models for dataset {}'.format(dataset))
 
 
 def default_multi_classification(x_train, y_train, x_test, y_test, classifiers):
@@ -129,10 +190,10 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
                 else:
                     assert 0, 'unkown label type'
                 continue
-
             if cinfo['type'] == CONTINUOUS:
                 if cinfo['min'] >= 0 and cinfo['max'] >= 1e3:
                     feature.append(np.log(max(col, 1e-2)))
+
                 else:
                     feature.append((col - cinfo['min']) / (cinfo['max'] - cinfo['min']) * 5)
 
@@ -142,6 +203,7 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
             else:
                 if cinfo['size'] <= 2:
                     feature.append(col)
+
                 else:
                     tmp = [0] * cinfo['size']
                     tmp[int(col)] = 1
@@ -150,70 +212,6 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
         labels.append(label)
 
     return features, labels
-
-
-DATASET_MODELS_MAP = {
-    'mnist12': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (LogisticRegression(
-            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
-            "Logistic Regression"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
-    ],
-    'mnist28': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (LogisticRegression(
-            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
-            "Logistic Regression"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
-    ],
-    'adult': [
-        (DecisionTreeClassifier(max_depth=15, class_weight='balanced'),
-            "Decision Tree (max_depth=20)"),
-        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
-        (LogisticRegression(
-            solver='lbfgs', n_jobs=2, class_weight='balanced', max_iter=50),
-            "Logistic Regression"),
-        (MLPClassifier((50, ), max_iter=50), "MLP (50)")
-    ],
-    'census': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'credit': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'intrusion': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'covtype': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'news': [
-        (LinearRegression(), "Linear Regression"),
-        (MLPRegressor((100, ), max_iter=50), "MLP (100)")
-    ]
-}
-
-
-def get_models(dataset):
-    models = DATASET_MODELS_MAP.get(dataset)
-    if models:
-        return models
-
-    else:
-        raise ValueError('Could not find models for dataset {}'.format(dataset))
 
 
 def default_gmm_likelihood(trainset, testset, n):
@@ -294,8 +292,8 @@ DATASET_EVALUATOR_MAP = {
 }
 
 
-def evalute_dataset(dataset, trainset, testset, meta):
-
+def evaluate_dataset(dataset, trainset, testset, meta):
+    # TODO: Use categoricals and ordinals instead of meta
     evaluator = DATASET_EVALUATOR_MAP.get(dataset)
 
     if evaluator is None:
@@ -317,6 +315,7 @@ def evalute_dataset(dataset, trainset, testset, meta):
 
 
 def compute_distance(trainset, syn, meta, sample=300):
+    # TODO: Use categoricals and ordinals instead of meta
     mask_d = np.zeros(len(meta))
 
     for id_, info in enumerate(meta):
@@ -328,7 +327,7 @@ def compute_distance(trainset, syn, meta, sample=300):
     std = np.std(trainset, axis=0) + 1e-6
 
     dis_all = []
-    for i in range(sample):
+    for i in range(min(sample, len(trainset))):
         current = syn[i]
         distance_d = (trainset - current) * mask_d > 0
         distance_d = np.sum(distance_d, axis=1)
@@ -341,88 +340,59 @@ def compute_distance(trainset, syn, meta, sample=300):
     return np.mean(dis_all)
 
 
-def get_arg_parser():
-    parser = argparse.ArgumentParser(description='Evaluate output of one synthesizer.')
-    parser.add_argument('--result', type=str, default='output/__result__', help='result dir')
-    parser.add_argument(
-        '--force', dest='force', action='store_true', help='overwrite result', default=False)
-    parser.add_argument('synthetic', type=str, help='synthetic data folder')
+def get_metadata(data, categoricals, ordinals, label):
+    meta = []
 
-    return parser
+    df = pd.DataFrame(data)
+    for index in df:
+        column = data[index]
 
-
-def main(result, synthetic, force):
-
-    if not os.path.exists(args.result):
-        os.makedirs(args.result)
-
-    result_file = "{}/{}.json".format(args.result,
-                                      args.synthetic.replace('/', '\t').split()[-1])
-    if os.path.exists(result_file):
-        logging.warning("result file {} exists.".format(result_file))
-        if args.force:
-            logging.warning("overwrite {}.".format(result_file))
+        if index in categoricals:
+            mapper = column.value_counts().index.tolist()
+            meta.append({
+                "name": index,
+                "type": CATEGORICAL,
+                "size": len(mapper),
+                "i2s": mapper
+            })
+        elif index in ordinals:
+            value_count = list(dict(column.value_counts()).items())
+            value_count = sorted(value_count, key=lambda x: -x[1])
+            mapper = list(map(lambda x: x[0], value_count))
+            meta.append({
+                "name": index,
+                "type": ORDINAL,
+                "size": len(mapper),
+                "i2s": mapper
+            })
         else:
-            exit()
+            meta.append({
+                "name": index,
+                "type": CONTINUOUS,
+                "min": column.min(),
+                "max": column.max(),
+            })
 
-    logging.info("use result file {}.".format(result_file))
+        if index == label:
+            meta[-1]['name'] = 'label'
 
-    synthetic_folder = args.synthetic
-    synthetic_files = glob.glob("{}/*.npz".format(synthetic_folder))
+    return meta
+
+
+def evaluate(train, test, synthesized_data, categoricals=None, ordinals=None, label=None):
+    categoricals = categoricals or list()
+    ordinals = ordinals or list()
+
+    meta = get_metadata(train, categoricals, ordinals, label)
 
     results = []
+    for step, synth_data in enumerate(synthesized_data):
+        performance = evaluate_dataset('intrusion', synth_data, test, meta)
+        distance = compute_distance(train, synth_data, meta)
 
-    for synthetic_file in synthetic_files:
-        # synthetic_file is like xxx/xxx/dataset_iter_step.npz
-        # iter is the iteration of experiment
-        # step is the learning steps of some synthesizer, 0 if no learning
-        syn = np.load(synthetic_file)['syn']
-        if np.any(np.isnan(syn)):
-            continue
+        for perf in performance:
+            perf['step'] = step
+            perf['distance'] = distance
+            results.append(perf)
 
-        dataset_iter_step = synthetic_file.split('/')[-1]
-        assert dataset_iter_step[-4:] == '.npz'
-        dataset_iter_step = dataset_iter_step[:-4].split('_')
-
-        dataset = dataset_iter_step[0]
-        iter = int(dataset_iter_step[1])
-        step = int(dataset_iter_step[2])
-
-        data_filename = glob.glob("data/*/{}.npz".format(dataset))
-        meta_filename = glob.glob("data/*/{}.json".format(dataset))
-
-        if len(data_filename) != 1:
-            logging.warning("Skip. Can't find dataset {}.".format(dataset))
-            continue
-
-        if len(meta_filename) != 1:
-            logging.warning("Skip. Can't find meta {}.".format(dataset))
-            continue
-
-        data = np.load(data_filename[0])['test']
-        data_train = np.load(data_filename[0])['train']
-        with open(meta_filename[0]) as f:
-            meta = json.load(f)
-
-        logging.info("Evaluating {}".format(synthetic_file))
-        performance = evalute_dataset(dataset, syn, data, meta)
-
-        distance = compute_distance(data_train, syn, meta)
-        res = {
-            "dataset": dataset,
-            "iter": iter,
-            "step": step,
-            "performance": performance,
-            "distance": distance
-        }
-
-        results.append(res)
-
-    with open(result_file, "w") as f:
-        json.dump(results, f, sort_keys=True, indent=4, separators=(',', ': '))
-
-
-if __name__ == "__main__":
-    parser = get_arg_parser()
-    args = parser.parse_args()
-    main(*args)
+    return results

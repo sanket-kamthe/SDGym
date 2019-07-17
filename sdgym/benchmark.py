@@ -1,69 +1,57 @@
+import numpy as np
+import pandas as pd
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+
+from sdgym.evaluate import evaluate
+
+DATASETS = {
+    'iris': {
+        'label': 4
+    },
+    # 'adult': {
+    #     'categoricals': [
+    #     ],
+    #     'ordinals': [
+    #     ]
+    # },
+}
 
 
-SYNTHESIZERS = []
-DATASETS = []
+def load_dataset(name):
+    # TODO: Make this real
+    dataset = load_iris()
+    X_train, X_test, y_train, y_test = train_test_split(
+        dataset.data, dataset.target, test_size=0.3, random_state=0)
+    train = np.concatenate([X_train, y_train.reshape(-1, 1)], axis=1)
+    test = np.concatenate([X_test, y_test.reshape(-1, 1)], axis=1)
+
+    return train, test
 
 
-def synthesize(synthesizer, datasets):
-    """Synthesize all datasets with synthesizer.
+def benchmark(synthesizer, datasets=DATASETS, repeat=3):
 
-    Args:
-        synthesizer(callable):
-            A synthesizer function.
-        datasets(dict[str, tuple]):
-            The tuple 
-            - The name of the dataset.
-            - The actual data as an np.ndarray.
-            - A list of categorical columns.
-            - A list of ordinal columns.
+    results = list()
+    for name, values in datasets.items():
+        train, test = load_dataset(name)
 
-    Return:
-        dict[str, tuple]:
-            A dict whose values are tuples of real and synthesized tables and their annotations.
-    """
-    result = {}
-    for name, (real_data, categorical_columns, ordinal_columns in datasets:
-        synthetic_data = synthesizer(real_data, categorical_columns, ordinal_columns)
-        result[name] = (real_data, synthetic_data)
+        iteration_results = list()
+        for iteration in range(repeat):
+            synthesized = [
+                synthesizer(
+                    train,
+                    values.get('categorical', list()),
+                    values.get('ordinal', list())
+                )
+                for _ in range(repeat)
+            ]
 
-    return result
+            dataset_results = evaluate(train, test, synthesized, **values)
+            dataset_results = pd.DataFrame(dataset_results)
+            dataset_results['dataset'] = name
+            dataset_results['iter'] = iteration
+            iteration_results.append(dataset_results)
 
+        results.extend(iteration_results)
 
-def evaluate(synthesized_datasets):
-    """Evaluate a set of synthesized results.
-
-    Args:
-        synthesized_datasets(dict[str, tuple]):
-
-    Returns:
-
-    """
-    pass
-
-
-def evalute_dataset(dataset, trainset, testset, meta):
-
-    evaluator = DATASET_EVALUATOR_MAP.get(dataset)
-
-    if evaluator is None:
-        logging.warning("{} evaluation not defined.".format(dataset))
-        return
-
-    if dataset in ['asia', 'alarm', 'child', 'insurance']:
-        return evaluator(dataset, trainset, testset, meta)
-
-    if dataset in [
-            "mnist12", "mnist28", "covtype", "intrusion", 'credit', 'census', 'adult', 'news']:
-        x_train, y_train = make_features(trainset, meta)
-        x_test, y_test = make_features(testset, meta)
-        return evaluator(x_train, y_train, x_test, y_test, get_models(dataset))
-
-    bayesian_parameter = BAYESIAN_PARAMETER.get(dataset)
-    if bayesian_parameter:
-        return evaluator(trainset, testset, bayesian_parameter)
-
-def benchmark(synthesizer, baseline=SYNTHESIZERS, datasets=DATASETS, repetitions=5):
-    """ """
-    synthezised
-    for name, real_data, continous_columns, ordinal_columns in datasets:
-        synthetic_data = synthesizer(real_data, continous_columns, ordinal_columns)
+    return pd.concat(results)

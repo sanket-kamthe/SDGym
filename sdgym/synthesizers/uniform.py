@@ -1,19 +1,19 @@
 import numpy as np
 
 from sdgym.synthesizers.base import BaseSynthesizer
-
-rng = np.random
+from sdgym.synthesizers.utils import Transformer
 
 
 class UniformSynthesizer(BaseSynthesizer):
-    """docstring for IdentitySynthesizer."""
+    """UniformSynthesizer."""
 
-    def train(self, train_data):
-        self.dtype = train_data.dtype
-        self.shape = train_data.shape
+    def fit(self, data):
+        self.dtype = data.dtype
+        self.shape = data.shape
+        self.meta = Transformer.get_metadata(data, self.categoricals, self.ordinals)
 
-    def generate(self, n):
-        data = rng.uniform(0, 1, (n, self.shape[1]))
+    def sample(self, n):
+        data = np.random.uniform(0, 1, (n, self.shape[1]))
 
         for i, c in enumerate(self.meta):
             if c['type'] == 'continuous':
@@ -21,4 +21,4 @@ class UniformSynthesizer(BaseSynthesizer):
             else:
                 data[:, i] = (data[:, i] * (1 - 1e-8) * c['size']).astype('int32')
 
-        return [(0, data.astype(self.dtype))]
+        return data.astype(self.dtype)
