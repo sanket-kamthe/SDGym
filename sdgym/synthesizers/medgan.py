@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import torch
 from torch import nn
@@ -126,7 +124,6 @@ class MedganSynthesizer(BaseSynthesizer):
     def __init__(self,
                  categoricals,
                  ordinals,
-                 working_dir='medgan',
                  embedding_dim=128,
                  random_dim=128,
                  generator_dims=(128, 128),          # 128 -> 128 -> 128
@@ -155,11 +152,8 @@ class MedganSynthesizer(BaseSynthesizer):
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.transformer = None
+        self.checkpoint = None
 
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.working_dir = working_dir
         super().__init__(categoricals, ordinals)
 
     def fit(self, data):
@@ -228,22 +222,20 @@ class MedganSynthesizer(BaseSynthesizer):
                         optimizerG.step()
 
             if i + 1 in self.store_epoch:
-                torch.save({
+                self.checkpoint = {
                     "generator": generator.state_dict(),
                     "discriminator": discriminator.state_dict(),
                     "encoder": encoder.state_dict(),
                     "decoder": decoder.state_dict()
-                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
+                }
 
     def sample(self, n):
         data_dim = self.transformer.output_dim
         generator = Generator(self.random_dim, self.generator_dims, self.bn_decay).to(self.device)
         decoder = Decoder(self.embedding_dim, self.compress_dims, data_dim).to(self.device)
 
-        epoch = max(self.store_epoch)
-        checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
-        generator.load_state_dict(checkpoint['generator'])
-        decoder.load_state_dict(checkpoint['decoder'])
+        generator.load_state_dict(self.checkpoint['generator'])
+        decoder.load_state_dict(self.checkpoint['decoder'])
 
         generator.eval()
         decoder.eval()

@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import torch
 import torch.optim as optim
@@ -274,7 +272,6 @@ class TGANSynthesizer(BaseSynthesizer):
     def __init__(self,
                  categoricals,
                  ordinals,
-                 working_dir='tgan',
                  embedding_dim=128,
                  gen_dim=(256, 256),
                  dis_dim=(256, 256),
@@ -290,10 +287,7 @@ class TGANSynthesizer(BaseSynthesizer):
         self.batch_size = batch_size
         self.store_epoch = store_epoch
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.working_dir = working_dir
+        self.checkpoint = None
         super().__init__(categoricals, ordinals)
 
     def fit(self, train_data):
@@ -399,10 +393,10 @@ class TGANSynthesizer(BaseSynthesizer):
                 optimizerG.step()
 
             if i + 1 in self.store_epoch:
-                torch.save({
+                self.checkpoint = {
                     "generator": generator.state_dict(),
                     "discriminator": discriminator.state_dict(),
-                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
+                }
 
     def sample(self, n):
         data_dim = self.transformer.output_dim
@@ -412,33 +406,28 @@ class TGANSynthesizer(BaseSynthesizer):
             self.gen_dim,
             data_dim).to(self.device)
 
-        ret = []
-        for epoch in self.store_epoch:
-            checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
-            generator.load_state_dict(checkpoint['generator'])
-            generator.eval()
-            generator.to(self.device)
+        generator.load_state_dict(self.checkpoint['generator'])
+        generator.eval()
+        generator.to(self.device)
 
-            steps = n // self.batch_size + 1
-            data = []
-            for i in range(steps):
-                mean = torch.zeros(self.batch_size, self.embedding_dim)
-                std = mean + 1
-                fakez = torch.normal(mean=mean, std=std).to(self.device)
+        steps = n // self.batch_size + 1
+        data = []
+        for i in range(steps):
+            mean = torch.zeros(self.batch_size, self.embedding_dim)
+            std = mean + 1
+            fakez = torch.normal(mean=mean, std=std).to(self.device)
 
-                condvec = self.cond_generator.sample_zero(self.batch_size)
-                if condvec is None:
-                    pass
-                else:
-                    c1 = condvec
-                    c1 = torch.from_numpy(c1).to(self.device)
-                    fakez = torch.cat([fakez, c1], dim=1)
+            condvec = self.cond_generator.sample_zero(self.batch_size)
+            if condvec is None:
+                pass
+            else:
+                c1 = condvec
+                c1 = torch.from_numpy(c1).to(self.device)
+                fakez = torch.cat([fakez, c1], dim=1)
 
-                fake = generator(fakez)
-                fakeact = apply_activate(fake, output_info)
-                data.append(fakeact.detach().cpu().numpy())
-            data = np.concatenate(data, axis=0)
-            data = data[:n]
-            data = self.transformer.inverse_transform(data, None)
-            ret.append((epoch, data))
-        return ret
+            fake = generator(fakez)
+            fakeact = apply_activate(fake, output_info)
+            data.append(fakeact.detach().cpu().numpy())
+        data = np.concatenate(data, axis=0)
+        data = data[:n]
+        return self.transformer.inverse_transform(data, None)

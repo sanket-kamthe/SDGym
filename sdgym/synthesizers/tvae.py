@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import torch
 from torch.nn import Linear, Module, Parameter, ReLU, Sequential
@@ -82,7 +80,6 @@ class TVAESynthesizer(BaseSynthesizer):
         self,
         categoricals,
         ordinals,
-        working_dir='tvae',
         embedding_dim=128,
         compress_dims=(128, 128),
         decompress_dims=(128, 128),
@@ -101,10 +98,7 @@ class TVAESynthesizer(BaseSynthesizer):
         self.loss_factor = 2
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.working_dir = working_dir
+        self.checkpoint = None
         super().__init__(categoricals, ordinals)
 
     def fit(self, train_data):
@@ -138,33 +132,28 @@ class TVAESynthesizer(BaseSynthesizer):
                 decoder.sigma.data.clamp_(0.01, 1.0)
 
             if i + 1 in self.store_epoch:
-                torch.save({
+                self.checkpoint = {
                     "encoder": encoder.state_dict(),
                     "decoder": decoder.state_dict()
-                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
+                }
 
     def sample(self, n):
         data_dim = self.transformer.output_dim
         decoder = Decoder(self.embedding_dim, self.compress_dims, data_dim).to(self.device)
 
-        ret = []
-        for epoch in self.store_epoch:
-            checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
-            decoder.load_state_dict(checkpoint['decoder'])
-            decoder.eval()
-            decoder.to(self.device)
+        decoder.load_state_dict(self.checkpoint['decoder'])
+        decoder.eval()
+        decoder.to(self.device)
 
-            steps = n // self.batch_size + 1
-            data = []
-            for i in range(steps):
-                mean = torch.zeros(self.batch_size, self.embedding_dim)
-                std = mean + 1
-                noise = torch.normal(mean=mean, std=std).to(self.device)
-                fake, sigmas = decoder(noise)
-                fake = torch.tanh(fake)
-                data.append(fake.detach().cpu().numpy())
-            data = np.concatenate(data, axis=0)
-            data = data[:n]
-            data = self.transformer.inverse_transform(data, sigmas.detach().cpu().numpy())
-            ret.append(data)
-        return ret
+        steps = n // self.batch_size + 1
+        data = []
+        for i in range(steps):
+            mean = torch.zeros(self.batch_size, self.embedding_dim)
+            std = mean + 1
+            noise = torch.normal(mean=mean, std=std).to(self.device)
+            fake, sigmas = decoder(noise)
+            fake = torch.tanh(fake)
+            data.append(fake.detach().cpu().numpy())
+        data = np.concatenate(data, axis=0)
+        data = data[:n]
+        return self.transformer.inverse_transform(data, sigmas.detach().cpu().numpy())

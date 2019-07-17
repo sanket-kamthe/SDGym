@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import torch
 from torch.nn import Dropout, Linear, Module, ReLU, Sequential
@@ -86,7 +84,6 @@ class VEEGANSynthesizer(BaseSynthesizer):
         self,
         categoricals,
         ordinals,
-        working_dir='veegan',
         embedding_dim=32,
         gen_dim=(128, 128),
         dis_dim=(128, ),
@@ -106,10 +103,7 @@ class VEEGANSynthesizer(BaseSynthesizer):
         self.store_epoch = store_epoch
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.working_dir = working_dir
+        self.checkpoint = None
         super().__init__(categoricals, ordinals)
 
     def fit(self, train_data):
@@ -162,34 +156,29 @@ class VEEGANSynthesizer(BaseSynthesizer):
                 optimizerR.step()
 
             if i + 1 in self.store_epoch:
-                torch.save({
+                self.checkpoint = {
                     "generator": generator.state_dict(),
                     "discriminator": discriminator.state_dict(),
                     "reconstructor": reconstructor.state_dict(),
-                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
+                }
 
     def sample(self, n):
         data_dim = self.transformer.output_dim
         output_info = self.transformer.output_info
         generator = Generator(self.embedding_dim, self.gen_dim, data_dim).to(self.device)
 
-        ret = []
-        for epoch in self.store_epoch:
-            checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
-            generator.load_state_dict(checkpoint['generator'])
-            generator.eval()
-            generator.to(self.device)
+        generator.load_state_dict(self.checkpoint['generator'])
+        generator.eval()
+        generator.to(self.device)
 
-            steps = n // self.batch_size + 1
-            data = []
-            for i in range(steps):
-                mean = torch.zeros(self.batch_size, self.embedding_dim)
-                std = mean + 1
-                noise = torch.normal(mean=mean, std=std).to(self.device)
-                fake = generator(noise, output_info)
-                data.append(fake.detach().cpu().numpy())
-            data = np.concatenate(data, axis=0)
-            data = data[:n]
-            data = self.transformer.inverse_transform(data)
-            ret.append(data)
-        return ret
+        steps = n // self.batch_size + 1
+        data = []
+        for i in range(steps):
+            mean = torch.zeros(self.batch_size, self.embedding_dim)
+            std = mean + 1
+            noise = torch.normal(mean=mean, std=std).to(self.device)
+            fake = generator(noise, output_info)
+            data.append(fake.detach().cpu().numpy())
+        data = np.concatenate(data, axis=0)
+        data = data[:n]
+        return [self.transformer.inverse_transform(data)]

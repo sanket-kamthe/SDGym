@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-import os
-
 import numpy as np
 import torch
 from torch.nn import (
@@ -123,7 +121,6 @@ class TableganSynthesizer(BaseSynthesizer):
     def __init__(self,
                  categoricals,
                  ordinals,
-                 working_dir='tablegan',
                  random_dim=100,
                  num_channels=64,
                  l2scale=1e-5,
@@ -138,10 +135,7 @@ class TableganSynthesizer(BaseSynthesizer):
         self.store_epoch = store_epoch
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if not os.path.isdir(working_dir):
-            os.mkdir(working_dir)
-
-        self.working_dir = working_dir
+        self.checkpoint = None
 
         super().__init__(categoricals, ordinals)
 
@@ -227,32 +221,26 @@ class TableganSynthesizer(BaseSynthesizer):
                 if((id_ + 1) % 50 == 0):
                     print("epoch", i + 1, "step", id_ + 1, loss_d, loss_g, loss_c)
             if i + 1 in self.store_epoch:
-                torch.save({
+                self.checkpoint = {
                     "generator": generator.state_dict(),
                     "discriminator": discriminator.state_dict(),
-                }, "{}/model_{}.tar".format(self.working_dir, i + 1))
+                }
 
     def sample(self, n):
         _, self.layers_G, _ = determine_layers(self.side, self.random_dim, self.num_channels)
         generator = Generator(self.transformer.meta, self.side, self.layers_G).to(self.device)
 
-        ret = []
-        for epoch in self.store_epoch:
-            checkpoint = torch.load("{}/model_{}.tar".format(self.working_dir, epoch))
-            generator.load_state_dict(checkpoint['generator'])
+        generator.load_state_dict(self.checkpoint['generator'])
 
-            generator.eval()
-            generator.to(self.device)
+        generator.eval()
+        generator.to(self.device)
 
-            steps = n // self.batch_size + 1
-            data = []
-            for i in range(steps):
-                noise = torch.randn(self.batch_size, self.random_dim, 1, 1, device=self.device)
-                fake = generator(noise)
-                data.append(fake.detach().cpu().numpy())
+        steps = n // self.batch_size + 1
+        data = []
+        for i in range(steps):
+            noise = torch.randn(self.batch_size, self.random_dim, 1, 1, device=self.device)
+            fake = generator(noise)
+            data.append(fake.detach().cpu().numpy())
 
-            data = np.concatenate(data, axis=0)
-            data = self.transformer.inverse_transform(data[:n])
-            ret.append(data)
-
-        return ret
+        data = np.concatenate(data, axis=0)
+        return self.transformer.inverse_transform(data[:n])
