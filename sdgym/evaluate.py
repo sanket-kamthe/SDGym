@@ -11,7 +11,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.tree import DecisionTreeClassifier
 
-from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
+from sdgym.synthesizers.utils import CATEGORICAL, CONTINUOUS, ORDINAL
 
 logging.basicConfig(level=logging.INFO)
 

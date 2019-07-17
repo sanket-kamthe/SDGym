@@ -31,7 +31,7 @@ def method_name_order(item):
     return METHOD_ORDER.get(item[0].lower(), 6)
 
 
-def coverage(datasets, results):
+def coverage(datasets, results, summary_dir):
     ticks = []
     values = []
 
@@ -56,7 +56,7 @@ def coverage(datasets, results):
     plt.savefig("{}/coverage.jpg".format(summary_dir), bbox_inches='tight')
 
 
-def save_barchart(barchart, filename):
+def save_barchart(barchart, dataset, filename):
     barchart = pd.DataFrame(barchart, columns=['synthesizer', 'metric', 'val'])
 
     methods = set()
@@ -72,7 +72,7 @@ def save_barchart(barchart, filename):
     plt.savefig(filename, bbox_inches='tight')
 
 
-def dataset_performance(dataset, results):
+def dataset_performance(dataset, results, summary_dir):
     synthesizer_metric_perform = {}
 
     for synthesizer, all_result in results:
@@ -120,13 +120,13 @@ def dataset_performance(dataset, results):
             else:
                 barchart.append((synthesizer, k, v_t))
 
-    save_barchart(barchart, "{}/{}.jpg".format(summary_dir, dataset))
-    save_barchart(barchart_d, "{}/{}_d.jpg".format(summary_dir, dataset))
+    save_barchart(barchart, dataset, "{}/{}.jpg".format(summary_dir, dataset))
+    save_barchart(barchart_d, dataset, "{}/{}_d.jpg".format(summary_dir, dataset))
 
     return synthesizer_metric_perform
 
 
-def generate_tabular_result(dataset_perform):
+def generate_tabular_result(dataset_perform, summary_dir):
     df = pd.DataFrame(data={'alg': []})
 
     for dataset, alg_metric_perform in dataset_perform.items():
@@ -150,11 +150,8 @@ def generate_tabular_result(dataset_perform):
     df.to_csv("{}/results.csv".format(summary_dir))
 
 
-if __name__ == "__main__":
-    args = parser.parse_args()
-
-    result_files = glob.glob("{}/*.json".format(args.result))
-    summary_dir = args.summary
+def summary(result='output/__result__', summary_dir='output/__summary__'):
+    result_files = glob.glob("{}/*.json".format(result))
 
     if not os.path.exists(summary_dir):
         os.makedirs(summary_dir)
@@ -170,14 +167,14 @@ if __name__ == "__main__":
 
         results.append((model, res))
 
-    coverage(datasets, results)
+    coverage(datasets, results, summary_dir)
 
     dataset_perform = {}
     for dataset in datasets:
-        perform = dataset_performance(dataset, results)
+        perform = dataset_performance(dataset, results, summary_dir)
         if perform is None:
             continue
         else:
             dataset_perform[dataset] = perform
 
-    generate_tabular_result(dataset_perform)
+    generate_tabular_result(dataset_perform, summary_dir)
