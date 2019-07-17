@@ -1,12 +1,10 @@
-import argparse
-import json
-import os
+import itertools
+import math
 import re
 
 import numpy as np
 from pomegranate import BayesianNetwork, ConditionalProbabilityTable, DiscreteDistribution, Node
-
-from sdgym import utils
+from sklearn.datasets import make_circles
 
 
 def map_col(index2str, values):
@@ -391,54 +389,92 @@ class BIFMaker(MultivariateMaker):
         self.model = model
 
 
-if __name__ == "__main__":
-    supported_distributions = {
-        'chain': ChainMaker,
-        'tree': TreeMaker,
-        'fc': FCMaker,
-        'general': GeneralMaker
-    }
+MULTIVARIATE_DISTRIBUTIONS = {
+    'chain': ChainMaker,
+    'tree': TreeMaker,
+    'fc': FCMaker,
+    'general': GeneralMaker
+}
 
-    parser = argparse.ArgumentParser(description='Generate simulated Data for a distribution')
-    parser.add_argument(
-        'distribution', type=str, help='specify type of distributions to sample from')
-    parser.add_argument(
-        '--sample', type=int, default=10000, help='maximum samples in the simulated data.')
 
-    args = parser.parse_args()
-    dist = args.distribution
-    num_sample = args.sample * 2
-    if dist in supported_distributions:
-        maker = supported_distributions[dist]()
-        samples = maker.sample(num_sample)
-    else:
-        biffile = "data/raw/bif/" + dist + ".bif"
-        if os.path.exists(biffile):
-            maker = BIFMaker(biffile)
-            samples = maker.sample(num_sample)
+BIVARIATE_DISTRIBUTIONS = ['grid', 'gridr', 'ring', '2rings']
+
+
+def create_distribution(dist_type, num_samples):
+    if dist_type in ["grid", "gridr"]:
+        return make_gaussian_mixture(dist_type, num_samples)
+    elif dist_type == "ring":
+        return make_gaussian_mixture(dist_type, num_samples, num_components=8)
+    elif dist_type == "2rings":
+        return make_two_rings(num_samples)
+
+
+def make_gaussian_mixture(dist_type, num_samples, num_components=25, s=0.05, n_dim=2):
+    """Generate from Gaussian mixture models arranged in grid or ring."""
+    sigmas = np.zeros((n_dim, n_dim))
+    np.fill_diagonal(sigmas, s)
+    samples = np.empty([num_samples, n_dim])
+    bsize = int(np.round(num_samples / num_components))
+
+    if dist_type == "grid":
+        mus = np.array(
+            [
+                np.array([i, j]) for i, j
+                in itertools.product(range(-4, 5, 2), range(-4, 5, 2))
+            ],
+            dtype=np.float32
+        )
+
+    elif dist_type == "gridr":
+        mus = np.array(
+            [
+                np.array([i, j]) + (np.random.rand(2) - 0.5)
+                for i, j in itertools.product(range(-4, 5, 2), range(-4, 5, 2))
+            ],
+            dtype=np.float32
+        )
+
+    elif dist_type == "ring":
+        root_halves = math.sqrt(1 / 2)
+        mus = np.array([
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1],
+            [-root_halves, -root_halves],
+            [root_halves, root_halves],
+            [-root_halves, root_halves],
+            [root_halves, -root_halves]
+        ])
+
+    for i in range(num_components):
+        if (i + 1) * bsize >= num_samples:
+            values = np.random.multivariate_normal(mus[i], sigmas, size=num_samples - i * bsize)
+            samples[i * bsize:num_samples, :] = values
         else:
-            assert 0
+            values = np.random.multivariate_normal(mus[i], sigmas, size=bsize)
+            samples[i * bsize:(i + 1) * bsize, :] = values
+    return samples
 
-    # assert 0
 
-    output_dir = "data/simulated"
-    if not os.path.exists(output_dir):
-        try:
-            os.mkdir(output_dir)
-        except Exception:
-            pass
+def make_two_rings(num_samples):
+    samples, labels = make_circles(
+        num_samples, shuffle=True, noise=None, random_state=None, factor=0.6)
 
-    # Store simulated data
-    with open("{}/{}.json".format(output_dir, dist), 'w') as f:
-        json.dump(maker.meta, f, sort_keys=True, indent=4, separators=(',', ': '))
+    return samples
 
-    with open("{}/{}_structure.json".format(output_dir, dist), 'w') as f:
-        f.write(maker.model.to_json())
 
-    np.savez(
-        "{}/{}.npz".format(output_dir, dist),
-        train=samples[:len(samples) // 2],
-        test=samples[len(samples) // 2:]
-    )
+def generate_artificial_data(distribution, sample=10000):
+    np.random.seed(0)
+    num_sample = sample * 2
 
-    utils.verify("{}/{}.npz".format(output_dir, dist), "{}/{}.json".format(output_dir, dist))
+    if distribution in MULTIVARIATE_DISTRIBUTIONS:
+        maker = MULTIVARIATE_DISTRIBUTIONS[distribution]()
+        samples = maker.sample(num_sample)
+
+    elif distribution in BIVARIATE_DISTRIBUTIONS:
+        samples = create_distribution(distribution, num_sample)
+    else:
+        raise ValueError('distribution not supported')
+
+    return samples[:len(samples) // 2], samples[len(samples) // 2:]

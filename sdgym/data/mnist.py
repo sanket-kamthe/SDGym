@@ -1,4 +1,3 @@
-
 import json
 import os
 
@@ -6,13 +5,11 @@ import numpy as np
 
 import cv2
 from keras.datasets import mnist
-from sdgym.utils import CATEGORICAL, verify
 
-output_dir = "data/real/"
-temp_dir = "tmp/"
+from sdgym.synthesizers.utils import CATEGORICAL
 
 
-def make_data(t_train, t_test, wh, name):
+def make_data(t_train, t_test, wh, name, output_dir='data/real/', temp_dir="tmp/"):
     np.random.seed(0)
 
     assert t_train.shape[1] == wh * wh + 1
@@ -43,7 +40,6 @@ def make_data(t_train, t_test, wh, name):
     t_test = t_test.astype('int8')
 
     np.savez("{}/{}.npz".format(output_dir, name), train=t_train, test=t_test)
-    verify("{}/{}.npz".format(output_dir, name), "{}/{}.json".format(output_dir, name))
 
     # Sample
     for i in range(5):
@@ -52,7 +48,7 @@ def make_data(t_train, t_test, wh, name):
         cv2.imwrite('{}/{}_{}_{}.png'.format(temp_dir, name, i, lb), img)
 
 
-if __name__ == "__main__":
+def process_mnist_dataset(output_dir="data/real/", temp_dir="tmp/"):
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
@@ -76,7 +72,7 @@ if __name__ == "__main__":
         axis=1
     )
 
-    make_data(t_train, t_test, 28, 'mnist28')
+    make_data(t_train, t_test, 28, 'mnist28', output_dir, temp_dir)
 
     x_train_r = np.asarray([cv2.resize(im, (12, 12)) for im in x_train])
     x_test_r = np.asarray([cv2.resize(im, (12, 12)) for im in x_test])
@@ -97,4 +93,4 @@ if __name__ == "__main__":
         axis=1
     )
 
-    make_data(t_train_r, t_test_r, 12, 'mnist12')
+    make_data(t_train_r, t_test_r, 12, 'mnist12', output_dir, temp_dir)

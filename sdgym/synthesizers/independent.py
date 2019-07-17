@@ -3,7 +3,7 @@ from sklearn.mixture import GaussianMixture
 
 from sdgym.synthesizers.base import BaseSynthesizer
 from sdgym.synthesizers.utils import Transformer
-from sdgym.utils import CONTINUOUS
+from sdgym.synthesizers.utils import CONTINUOUS
 
 rng = np.random
 

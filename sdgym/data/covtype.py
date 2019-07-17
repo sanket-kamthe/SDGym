@@ -6,20 +6,14 @@ import os
 import numpy as np
 import pandas as pd
 
-from sdgym.utils import CATEGORICAL, CONTINUOUS, verify
-
-output_dir = "data/real/"
-temp_dir = "tmp/"
+from sdgym.synthesizers.utils import CATEGORICAL, CONTINUOUS
 
 
-if __name__ == "__main__":
+def process_covtype_dataset(path, output_dir="data/real/"):
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    if not os.path.isdir(temp_dir):
-        os.mkdir(temp_dir)
-
-    df = pd.read_csv("data/raw/covtype/covtype.data", dtype='str', header=-1)
+    df = pd.read_csv(path, dtype='str', header=-1)
 
     col_type = [
         ("Elevation", CONTINUOUS),
@@ -75,5 +69,3 @@ if __name__ == "__main__":
     with open("{}/{}.json".format(output_dir, name), 'w') as f:
         json.dump(meta, f, sort_keys=True, indent=4, separators=(',', ': '))
     np.savez("{}/{}.npz".format(output_dir, name), train=t_train, test=t_test)
-
-    verify("{}/{}.npz".format(output_dir, name), "{}/{}.json".format(output_dir, name))

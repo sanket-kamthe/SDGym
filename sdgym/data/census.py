@@ -6,10 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from sdgym.utils import CATEGORICAL, CONTINUOUS, verify
-
-output_dir = "data/real/"
-temp_dir = "tmp/"
+from sdgym.synthesizers.utils import CATEGORICAL, CONTINUOUS
 
 
 def project_table(data, meta):
@@ -26,16 +23,13 @@ def project_table(data, meta):
     return values
 
 
-if __name__ == "__main__":
+def process_census_dataset(data_path, test_path, output_dir="data/real/"):
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    if os.path.isdir(temp_dir):
-        os.mkdir(temp_dir)
-
-    trainset = pd.read_csv("data/raw/census/census-income.data", dtype='str', header=-1)
+    trainset = pd.read_csv(data_path, dtype='str', header=-1)
     trainset = trainset.apply(lambda x: x.str.strip(' \t.'))
-    testset = pd.read_csv("data/raw/census/census-income.test", dtype='str', header=-1)
+    testset = pd.read_csv(test_path, dtype='str', header=-1)
     testset = testset.apply(lambda x: x.str.strip(' \t.'))
     trainset.drop([24], axis='columns', inplace=True)  # drop instance weight
     testset.drop([24], axis='columns', inplace=True)
@@ -111,5 +105,3 @@ if __name__ == "__main__":
     with open("{}/{}.json".format(output_dir, name), 'w') as f:
         json.dump(meta, f, sort_keys=True, indent=4, separators=(',', ': '))
     np.savez("{}/{}.npz".format(output_dir, name), train=t_train, test=t_test)
-
-    verify("{}/{}.npz".format(output_dir, name), "{}/{}.json".format(output_dir, name))

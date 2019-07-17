@@ -3,7 +3,10 @@ import pandas as pd
 from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 from sklearn.preprocessing import KBinsDiscretizer
 
-from sdgym.utils import CATEGORICAL, CONTINUOUS, ORDINAL
+
+CATEGORICAL = "categorical"
+CONTINUOUS = "continuous"
+ORDINAL = "ordinal"
 
 
 class Transformer:
