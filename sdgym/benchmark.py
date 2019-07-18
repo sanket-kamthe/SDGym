@@ -1,50 +1,62 @@
+import os
+import logging
+import urllib
+
 import numpy as np
 import pandas as pd
-from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
 
 from sdgym.evaluate import evaluate
 
+
+logging.basicConfig(level=logging.INFO)
+
+
 DATASETS = {
     'intrusion': {
-        'categorical': [1, 2, 3, 6, 11, 13, 19, 20, 40],
-        'ordinal': [7, 8, 10, 14, 17, 18],
-        'label': 40
+        'categoricals': [1, 2, 3, 6, 11, 13, 19, 20, 40],
+        'ordinals': [7, 8, 10, 14, 17, 18],
+        'label': 40,
+        'problem_type': 'multiclass_classification'
     },
     'news': {
-        'categorical': [11, 12, 13, 14, 15, 16, 29, 30, 31, 32, 33, 34, 35, 36],
-        'ordinal': [],
-        'label': 58
+        'categoricals': [11, 12, 13, 14, 15, 16, 29, 30, 31, 32, 33, 34, 35, 36],
+        'ordinals': [],
+        'label': 58,
+        'problem_type': 'regression'
     },
     'adult': {
-        'categorical': [1, 5, 6, 7, 8, 9, 13, 14],
-        'ordinal': [3],
-        'label': 14
+        'categoricals': [1, 5, 6, 7, 8, 9, 13, 14],
+        'ordinals': [3],
+        'label': 14,
+        'problem_type': 'binary_classification'
     },
     'covtype': {
-        'categorical': [
-            10,11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        'categoricals': [
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
             31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
             52, 53, 54
         ],
-        'ordinal': [],
-        'label': 54
+        'ordinals': [],
+        'label': 54,
+        'problem_type': 'multiclass_classification'
     },
     'credit': {
-        'categorical': [29],
-        'ordinal': [],
-        'label': 29
+        'categoricals': [29],
+        'ordinals': [],
+        'label': 29,
+        'problem_type': 'binary_classification'
     },
     'census': {
-        'categorical': [
+        'categoricals': [
             1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 23, 24, 25, 26, 27,
             28, 30, 31, 32, 33, 34, 35, 36, 37, 39, 40
         ],
-        'ordinal': [],
-        'label': 40
+        'ordinals': [],
+        'label': 40,
+        'problem_type': 'binary_classification'
     },
     'mnist12': {
-        'categorical': [
+        'categoricals': [
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
             45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
@@ -54,11 +66,12 @@ DATASETS = {
             124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
             141, 142, 143, 144
         ],
-        'ordinal': [],
-        'label': 144
+        'ordinals': [],
+        'label': 144,
+        'problem_type': 'multiclass_classification'
     },
     'mnist28': {
-        'categorical': [
+        'categoricals': [
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
             45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
@@ -105,53 +118,58 @@ DATASETS = {
             752, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767, 768,
             769, 770, 771, 772, 773, 774, 775, 776, 777, 778, 779, 780, 781, 782, 783, 784
         ],
-        'ordinal': [],
-        'label': 784
+        'ordinals': [],
+        'label': 784,
+        'problem_type': 'multiclass_classification'
     },
     'gridr': {
-        'categorical': [],
-        'ordinal': []
+        'categoricals': [],
+        'ordinals': [],
+        'problem_type': 'gaussian_likelihood'
     },
     'asia': {
-        'categorical': [0, 1, 2, 3, 4, 5, 6, 7],
-        'ordinal': []
+        'categoricals': [0, 1, 2, 3, 4, 5, 6, 7],
+        'ordinals': [],
+        'problem_type': 'bayesian_likelihood'
     },
     'child': {
-        'categorical': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-        'ordinal': []
+        'categoricals': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+        'ordinals': [],
+        'problem_type': 'bayesian_likelihood'
     },
     'grid': {
-        'categorical': [],
-        'ordinal': []
+        'categoricals': [],
+        'ordinals': [],
+        'problem_type': 'gaussian_likelihood'
     },
     'insurance': {
-        'categorical': [
+        'categoricals': [
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
             23, 24, 25, 26
         ],
-        'ordinal': []
+        'ordinals': [],
+        'problem_type': 'bayesian_likelihood'
     },
     'ring': {
-        'categorical': [],
-        'ordinal': []
+        'categoricals': [],
+        'ordinals': [],
+        'problem_type': 'gaussian_likelihood'
     },
     'alarm': {
-        'categorical': [
+        'categoricals': [
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36
         ],
-        'ordinal': []
+        'ordinals': [],
+        'problem_type': 'bayesian_likelihood'
     },
-    'census-train':
-        'categorical': []
-        'ordinal': []
 }
 
 
-S3_BUCKET = 'http://hdi-project-tgan.s3.amazonaws.com/'
+S3_BUCKET = 'http://hdi-project-sdgym.s3.amazonaws.com/'
 
 
-def load_demo_data(name):
+def load_dataset(name):
     """Fetch, load and prepare a dataset.
     If name is one of the demo datasets
     Args:
@@ -161,13 +179,13 @@ def load_demo_data(name):
     file_name = '{}.npz'.format(name)
     url = '{}{}.npz'.format(S3_BUCKET, file_name)
     file_path = os.path.join('data', file_name)
-    params = DEMO_DATASETS.get(name)
     if not os.path.isfile(file_path):
         base_path = os.path.dirname(file_path)
         if not os.path.exists(base_path):
             os.makedirs(base_path)
 
-    urllib.request.urlretrieve(url, file_path)
+        urllib.request.urlretrieve(url, file_path)
+
     data = np.load(file_path)
 
     return data['train'], data['test']
@@ -177,6 +195,7 @@ def benchmark(synthesizer, datasets=DATASETS, repeat=3):
 
     results = list()
     for name, values in datasets.items():
+        logging.info('Starting with dataset %s', name)
         train, test = load_dataset(name)
 
         iteration_results = list()

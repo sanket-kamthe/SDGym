@@ -23,23 +23,7 @@ BAYESIAN_PARAMETER = {
 }
 
 DATASET_MODELS_MAP = {
-    'mnist12': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (LogisticRegression(
-            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
-            "Logistic Regression"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
-    ],
-    'mnist28': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (LogisticRegression(
-            solver='lbfgs', n_jobs=2, multi_class="auto", class_weight='balanced', max_iter=50),
-            "Logistic Regression"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)")
-    ],
-    'adult': [
+    'binary_classification': [
         (DecisionTreeClassifier(max_depth=15, class_weight='balanced'),
             "Decision Tree (max_depth=20)"),
         (AdaBoostClassifier(), "Adaboost (estimator=50)"),
@@ -48,29 +32,12 @@ DATASET_MODELS_MAP = {
             "Logistic Regression"),
         (MLPClassifier((50, ), max_iter=50), "MLP (50)")
     ],
-    'census': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'credit': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (AdaBoostClassifier(), "Adaboost (estimator=50)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'intrusion': [
+    'multiclass_classification': [
         (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
             "Decision Tree (max_depth=30)"),
         (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
     ],
-    'covtype': [
-        (DecisionTreeClassifier(max_depth=30, class_weight='balanced'),
-            "Decision Tree (max_depth=30)"),
-        (MLPClassifier((100, ), max_iter=50), "MLP (100)"),
-    ],
-    'news': [
+    'regression': [
         (LinearRegression(), "Linear Regression"),
         (MLPRegressor((100, ), max_iter=50), "MLP (100)")
     ]
@@ -103,6 +70,7 @@ def default_multi_classification(x_train, y_train, x_test, y_test, classifiers):
     """
     performance = []
     for clf, name in classifiers:
+        logging.info('Evaluating using multiclass classifier %s', name)
         unique_labels = np.unique(y_train)
         if len(unique_labels) == 1:
             pred = [unique_labels[0]] * len(x_test)
@@ -129,6 +97,7 @@ def default_multi_classification(x_train, y_train, x_test, y_test, classifiers):
 def default_binary_classification(x_train, y_train, x_test, y_test, classifiers):
     performance = []
     for clf, name in classifiers:
+        logging.info('Evaluating using binary classifier %s', name)
         unique_labels = np.unique(y_train)
         if len(unique_labels) == 1:
             pred = [unique_labels[0]] * len(x_test)
@@ -151,6 +120,7 @@ def default_binary_classification(x_train, y_train, x_test, y_test, classifiers)
 
 
 def news_regression(x_train, y_train, x_test, y_test, regressors):
+    logging.info('Evaluating using regression.')
     performance = []
     y_train = np.log(np.clip(y_train, 1, 20000))
     y_test = np.log(np.clip(y_test, 1, 20000))
@@ -178,40 +148,37 @@ def make_features(data, meta, label_column='label', label_type='int', sample=500
     features = []
     labels = []
 
-    for row in data:
-        feature = []
-        label = None
-        for col, cinfo in zip(row, meta):
-            if cinfo['name'] == 'label':
-                if label_type == 'int':
-                    label = int(col)
-                elif label_type == 'float':
-                    label = float(col)
-                else:
-                    assert 0, 'unkown label type'
-                continue
-            if cinfo['type'] == CONTINUOUS:
-                if cinfo['min'] >= 0 and cinfo['max'] >= 1e3:
-                    feature.append(np.log(max(col, 1e-2)))
+    for index, cinfo in enumerate(meta):
+        col = data[:, index]
+        if cinfo['name'] == 'label':
+            if label_type == 'int':
+                labels = col.astype(int)
+            elif label_type == 'float':
+                labels = col.astype(float)
+            else:
+                assert 0, 'unkown label type'
+            continue
 
-                else:
-                    feature.append((col - cinfo['min']) / (cinfo['max'] - cinfo['min']) * 5)
-
-            elif cinfo['type'] == ORDINAL:
-                feature.append(col)
+        if cinfo['type'] == CONTINUOUS:
+            if cinfo['min'] >= 0 and cinfo['max'] >= 1e3:
+                feature = np.log(max(col.max(), 1e-2))
 
             else:
-                if cinfo['size'] <= 2:
-                    feature.append(col)
+                feature = (col - cinfo['min']) / (cinfo['max'] - cinfo['min']) * 5
 
-                else:
-                    tmp = [0] * cinfo['size']
-                    tmp[int(col)] = 1
-                    feature += tmp
+        elif cinfo['type'] == ORDINAL:
+            feature = col
+
+        else:
+            if cinfo['size'] <= 2:
+                feature = col
+
+            else:
+                feature = pd.get_dummies(col).values
+
         features.append(feature)
-        labels.append(label)
 
-    return features, labels
+    return np.concatenate(features), labels
 
 
 def default_gmm_likelihood(trainset, testset, n):
@@ -240,6 +207,7 @@ def mapper(data, meta):
 
 
 def default_bayesian_likelihood(dataset, trainset, testset, meta):
+    logging.info('Evaluating using bayesian likehood.')
     struct = glob.glob("data/*/{}_structure.json".format(dataset))
     assert len(struct) == 1
     bn1 = BayesianNetwork.from_json(struct[0])
@@ -274,42 +242,30 @@ def default_bayesian_likelihood(dataset, trainset, testset, meta):
 
 
 DATASET_EVALUATOR_MAP = {
-    "mnist12": default_multi_classification,
-    "mnist28": default_multi_classification,
-    "covtype": default_multi_classification,
-    "intrusion": default_multi_classification,
-    'credit': default_binary_classification,
-    'census': default_binary_classification,
-    'adult': default_binary_classification,
-    'news': news_regression,
-    'grid': default_gmm_likelihood,
-    'gridr': default_gmm_likelihood,
-    'ring': default_gmm_likelihood,
-    'asia': default_bayesian_likelihood,
-    'alarm': default_bayesian_likelihood,
-    'child': default_bayesian_likelihood,
-    'insurance': default_bayesian_likelihood,
+    'multiclass_classification': default_multi_classification,
+    'binary_classification': default_binary_classification,
+    'regression': news_regression,
+    'gaussian_likelihood': default_gmm_likelihood,
+    'bayesian_likelihood': default_bayesian_likelihood
 }
 
 
-def evaluate_dataset(dataset, trainset, testset, meta):
-    # TODO: Use categoricals and ordinals instead of meta
-    evaluator = DATASET_EVALUATOR_MAP.get(dataset)
+def evaluate_dataset(problem_type, trainset, testset, meta):
+    evaluator = DATASET_EVALUATOR_MAP.get(problem_type)
 
     if evaluator is None:
         logging.warning("{} evaluation not defined.".format(dataset))
         return
 
-    if dataset in ['asia', 'alarm', 'child', 'insurance']:
-        return evaluator(dataset, trainset, testset, meta)
+    if problem_type == 'bayesian_likelihood':
+        return evaluator(problem_type, trainset, testset, meta)
 
-    if dataset in [
-            "mnist12", "mnist28", "covtype", "intrusion", 'credit', 'census', 'adult', 'news']:
+    elif problem_type in ['multiclass_classification', 'binary_classification', 'regression']:
         x_train, y_train = make_features(trainset, meta)
         x_test, y_test = make_features(testset, meta)
-        return evaluator(x_train, y_train, x_test, y_test, get_models(dataset))
+        return evaluator(x_train, y_train, x_test, y_test, get_models(problem_type))
 
-    bayesian_parameter = BAYESIAN_PARAMETER.get(dataset)
+    bayesian_parameter = BAYESIAN_PARAMETER.get(problem_type)
     if bayesian_parameter:
         return evaluator(trainset, testset, bayesian_parameter)
 
@@ -345,7 +301,7 @@ def get_metadata(data, categoricals, ordinals, label):
 
     df = pd.DataFrame(data)
     for index in df:
-        column = data[index]
+        column = df[index]
 
         if index in categoricals:
             mapper = column.value_counts().index.tolist()
@@ -379,7 +335,9 @@ def get_metadata(data, categoricals, ordinals, label):
     return meta
 
 
-def evaluate(train, test, synthesized_data, categoricals=None, ordinals=None, label=None):
+def evaluate(
+    train, test, synthesized_data, categoricals=None, ordinals=None, label=None, problem_type=None
+):
     categoricals = categoricals or list()
     ordinals = ordinals or list()
 
@@ -387,7 +345,7 @@ def evaluate(train, test, synthesized_data, categoricals=None, ordinals=None, la
 
     results = []
     for step, synth_data in enumerate(synthesized_data):
-        performance = evaluate_dataset('intrusion', synth_data, test, meta)
+        performance = evaluate_dataset(problem_type, synth_data, test, meta)
         distance = compute_distance(train, synth_data, meta)
 
         for perf in performance:

@@ -8,7 +8,7 @@ from sdgym.synthesizers.utils import DiscretizeTransformer
 
 
 class CLBNSynthesizer(BaseSynthesizer):
-    """docstring for IdentitySynthesizer."""
+    """CLBNSynthesizer."""
 
     def __init__(self, categoricals, ordinals, *args, **kwargs):
         super().__init__(categoricals, ordinals, *args, **kwargs)

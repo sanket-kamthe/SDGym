@@ -101,7 +101,7 @@ setup(
     long_description_content_type='text/markdown',
     keywords='machine learning synthetic data benchmark generative models',
     name='sdgym',
-    packages=find_packages(include=['sdgym', 'sdgym.*']),
+    packages=find_packages(include=['sdgym', 'sdgym.*'], exclude=['sdgym.synthesizers.*']),
     setup_requires=setup_requires,
     test_suite='tests',
     tests_require=tests_require,
